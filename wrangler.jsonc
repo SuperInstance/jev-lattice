@@ -1,5 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
+  // production: `npm run deploy` · staging: `npm run deploy:staging` (env.staging below)
   "name": "jev-lattice",
   "main": "worker/index.mjs",
   "compatibility_date": "2026-09-01",
@@ -11,8 +12,13 @@
     "bindings": [{ "name": "LATTICE", "class_name": "LatticeDO" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LatticeDO"] }],
-  // control plane: tenant API keys (worker/control.mjs)
+  // control plane: tenant API keys and the lattice registry (worker/control.mjs)
   "d1_databases": [{ "binding": "CONTROL", "database_name": "jev-control", "database_id": "494583bf-4331-45ed-a11b-ea93d7ffe689" }],
+  // daily backups of every lattice (state, settings, audit), 30-day retention
+  "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "jev-backups" }],
+  "triggers": { "crons": ["17 3 * * *"] },
+  // one data point per API request: route, lattice, tenant, status, latency
+  "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "jev_lattice" }],
   // per-key request budget (Workers rate limiting; root key exempt)
   "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 50, "period": 10 } }],
   "vars": {
@@ -21,6 +27,28 @@
     "JEV_MAX_NODES": "5000",
     "JEV_MAX_PROOFS_PER_NODE": "200"
   },
-  "observability": { "enabled": true }
+  "observability": { "enabled": true },
   // secrets: JEV_API_KEY (required, root key), TYPESAFE_AI_TOKEN, MINIMAX_TOKEN
+
+  "env": {
+    "staging": {
+      // bindings are not inherited by environments, so each is repeated with staging resources
+      "name": "jev-lattice-staging",
+      "ai": { "binding": "AI" },
+      "worker_loaders": [{ "binding": "LOADER" }],
+      "durable_objects": { "bindings": [{ "name": "LATTICE", "class_name": "LatticeDO" }] },
+      "d1_databases": [{ "binding": "CONTROL", "database_name": "jev-control-staging", "database_id": "6f059ed3-aaf2-4abc-9019-5057f5e3659d" }],
+      "r2_buckets": [{ "binding": "BACKUPS", "bucket_name": "jev-backups-staging" }],
+      "triggers": { "crons": ["47 3 * * *"] },
+      "analytics_engine_datasets": [{ "binding": "METRICS", "dataset": "jev_lattice_staging" }],
+      "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1002", "simple": { "limit": 50, "period": 10 } }],
+      "vars": {
+        "JEV_MODEL": "jev-1.13.0",
+        "JEV_DEFAULT_PROVIDERS": "typesafe",
+        "JEV_MAX_NODES": "5000",
+        "JEV_MAX_PROOFS_PER_NODE": "200"
+      },
+      "observability": { "enabled": true }
+    }
+  }
 }

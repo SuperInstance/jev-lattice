@@ -174,6 +174,38 @@ else {
   check(events.ok && events.events.some(e => e.action === "revoke" && e.key_id === reader.id) && events.events.some(e => e.action === "create" && e.key_id === gk.id), "admin: key create/revoke history recorded");
 }
 
+// ---------- operations: registry, backup/restore, expiry, request ids ----------
+const statsRes = await fetch(`${base}/api/${lattice}/stats`, { headers: H });
+check(!!statsRes.headers.get("x-request-id"), "responses carry x-request-id");
+const reg = await (await fetch(`${base}/admin/lattices`, { headers: H })).json();
+if (reg.ok === false && /CONTROL/.test(reg.error || "")) console.log("SKIP registry (no CONTROL)");
+else {
+  check(reg.lattices?.some(l => l.name === lattice), "admin: lattice registry lists this lattice");
+  const before = (await (await fetch(`${base}/api/${lattice}/state`, { headers: H })).json()).nodes.length;
+  const bk = await (await fetch(`${base}/admin/backup`, { method: "POST", headers: H })).json();
+  if (bk.ok === false && /BACKUPS/.test(bk.error || "")) console.log("SKIP backups (no BACKUPS binding)");
+  else {
+    check(bk.ok && bk.backed_up >= 1 && bk.failed.length === 0, "admin: backup of every lattice to R2", `backed_up=${bk.backed_up} failed=${bk.failed.length}`);
+    const list = await (await fetch(`${base}/admin/backups/${lattice}`, { headers: H })).json();
+    const key = list.backups?.at(-1)?.key;
+    check(!!key && Number(list.backups.at(-1).nodes) === before, "admin: backup listed with node count", key);
+    await fetch(`${base}/api/${lattice}/state`, { method: "PUT", headers: H, body: JSON.stringify({ nodes: [] }) });
+    const wiped = (await (await fetch(`${base}/api/${lattice}/state`, { headers: H })).json()).nodes.length;
+    const rs = await (await fetch(`${base}/admin/restore/${lattice}`, { method: "POST", headers: H, body: JSON.stringify({ key }) })).json();
+    const after = (await (await fetch(`${base}/api/${lattice}/state`, { headers: H })).json()).nodes.length;
+    check(wiped === 0 && rs.ok && after === before, "admin: restore brings back the wiped lattice", `${before} → ${wiped} → ${after}`);
+    const bad = await fetch(`${base}/admin/restore/${lattice}`, { method: "POST", headers: H, body: JSON.stringify({ key: "lattices/other/x.json.gz" }) });
+    check(bad.status === 400, "admin: restore refuses another lattice's backup");
+    const au = await (await fetch(`${base}/api/${lattice}/audit?limit=5`, { headers: H })).json();
+    check(au.entries.some(e => e.tool === "restore"), "audit: restore recorded");
+  }
+  const ek = await (await fetch(`${base}/admin/keys`, { method: "POST", headers: H, body: JSON.stringify({ tenant: "smoke", scopes: ["read"], lattices: [lattice], expires_in_days: 0.00001 }) })).json();
+  await new Promise(r => setTimeout(r, 1500));
+  const exp = await fetch(`${base}/api/${lattice}/stats`, { headers: { authorization: `Bearer ${ek.key}` } });
+  check(exp.status === 401 && (await exp.json()).error === "token expired", "expired key rejected");
+  await fetch(`${base}/admin/keys/${ek.id}`, { method: "DELETE", headers: H });
+}
+
 const idle = await (await fetch(`${base}/api/${lattice}/idle`, { method: "POST", headers: H })).json();
 check(idle.ok && idle.consolidate?.ok, "idle cycle (alarm handler) runs");
 const info = await (await fetch(`${base}/api/${lattice}/stats`, { headers: H })).json();

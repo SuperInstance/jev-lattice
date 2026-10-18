@@ -119,16 +119,7 @@ export class JEVLattice {
   } = {}) {
     const id = uid(node_type === "QUESTION" ? "q" : "jev");
     const emb = embed(text);
-    let spatial;
-    if (coords && coords.length >= 2) {
-      spatial = coords.slice(0, DEFAULT_DIM);
-    } else {
-      const [hx, hy] = hashText(text || id);
-      spatial = [
-        clamp((hx * 2 - 1) * 0.7 + emb[0] * 0.3, -1.2, 1.2),
-        clamp((hy * 2 - 1) * 0.7 + (emb[1] || 0) * 0.3, -1.2, 1.2)
-      ];
-    }
+    const spatial = coords && coords.length >= 2 ? coords.slice(0, DEFAULT_DIM) : textCoord(text || id, emb);
 
     const proofs = Array.isArray(active_proofs) ? active_proofs.map(normalizeProof) : [];
     const derivedSalience = proofs.length
@@ -476,9 +467,46 @@ export class JEVLattice {
       }
       return out.sort((a, b) => a.d - b.d || index.get(a.m.id) - index.get(b.m.id));
     };
+    // The k nearest within radius (exact). A finer grid searched in rings around the node:
+    // after ring r, anything unvisited is at least r·fine away, so the search stops as soon as
+    // the k-th best is closer than that. Clustered lattices no longer scan whole dense cells.
+    const fine = Math.max(stitchRadius / 8, 1e-3);
+    const fkey = (x, y) => `${x},${y}`;
+    const fgrid = new Map();
+    for (const n of list) {
+      const k = fkey(Math.floor(n.spatial_coordinate[0] / fine), Math.floor(n.spatial_coordinate[1] / fine));
+      if (!fgrid.has(k)) fgrid.set(k, []);
+      fgrid.get(k).push(n);
+    }
+    const rings = Math.ceil(stitchRadius / fine) + 1;
+    const nearestK = (n, radius, k) => {
+      const cx = Math.floor(n.spatial_coordinate[0] / fine), cy = Math.floor(n.spatial_coordinate[1] / fine);
+      const best = [];
+      const before = (x, y) => x.d < y.d || (x.d === y.d && index.get(x.m.id) < index.get(y.m.id));
+      const consider = m => {
+        if (m === n) return;
+        const d = dist(n.spatial_coordinate, m.spatial_coordinate);
+        if (d >= radius || (best.length === k && d > best[k - 1].d)) return;
+        const c = { m, d };
+        if (best.length === k && !before(c, best[k - 1])) return;
+        let i = best.length < k ? best.length : k - 1;
+        if (best.length < k) best.push(c); else best[i] = c;
+        while (i > 0 && before(best[i], best[i - 1])) { [best[i], best[i - 1]] = [best[i - 1], best[i]]; i--; }
+      };
+      for (let r = 0; r <= rings; r++) {
+        for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // ring r only
+          for (const m of fgrid.get(fkey(cx + dx, cy + dy)) || []) consider(m);
+        }
+        // everything outside rings 0..r is farther than r·fine
+        if (best.length === k && best[k - 1].d < r * fine) break;
+        if (r * fine >= radius) break;
+      }
+      return best;
+    };
 
     // 1. Edge stitching (nearest maxDegree neighbours within stitchRadius), neighbour lists computed once
-    const nbrs = new Map(list.map(n => [n.id, near(n, stitchRadius).slice(0, maxDegree)]));
+    const nbrs = new Map(list.map(n => [n.id, nearestK(n, stitchRadius, maxDegree)]));
     const nbrSets = new Map([...nbrs].map(([id, l]) => [id, new Set(l.map(x => x.m.id))]));
     for (const a of list) {
       for (const { m: b, d } of nbrs.get(a.id)) {
@@ -622,7 +650,11 @@ export class JEVLattice {
         node_type: raw.node_type === "QUESTION" ? "QUESTION" : "OBSERVATION",
         text: raw.text || "",
         tags: raw.tags || [],
-        spatial_coordinate: sanitizeCoord(raw.spatial_coordinate),
+        // a node imported without a position gets one from its text, like createNode
+        // (before 0.9 every such node landed on [0, 0], and nearby observations were merged)
+        spatial_coordinate: Array.isArray(raw.spatial_coordinate) && raw.spatial_coordinate.length >= 1
+          ? sanitizeCoord(raw.spatial_coordinate)
+          : textCoord(raw.text || raw.id),
         embedding: raw.embedding || embed(raw.text || ""),
         transition_probabilities: raw.transition_probabilities || [],
         epistemic_uncertainty: raw.epistemic_uncertainty ?? 0.3,
@@ -770,6 +802,15 @@ export class JEVLattice {
       .slice(0, k)
       .map(x => x.n);
   }
+}
+
+/** Position derived from the text (hash + embedding), as createNode does. */
+function textCoord(text, emb = embed(text)) {
+  const [hx, hy] = hashText(text);
+  return [
+    clamp((hx * 2 - 1) * 0.7 + emb[0] * 0.3, -1.2, 1.2),
+    clamp((hy * 2 - 1) * 0.7 + (emb[1] || 0) * 0.3, -1.2, 1.2)
+  ];
 }
 
 function sanitizeCoord(c) {

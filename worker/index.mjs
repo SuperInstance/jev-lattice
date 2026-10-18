@@ -22,6 +22,11 @@
  *   POST /api/:name/idle              run the idle cycle now                 [admin]
  *   POST /admin/keys | GET /admin/keys | DELETE /admin/keys/:id              [root only]
  *   GET  /admin/events                key create / revoke history            [root only]
+ *   GET  /admin/lattices              every lattice ever written             [root only]
+ *   POST /admin/backup                back up every lattice to R2 now        [root only]
+ *   GET  /admin/backups/:name         list a lattice's backups               [root only]
+ *   POST /admin/restore/:name         {key} restore a backup into the lattice [root only]
+ * Cron (wrangler triggers): daily backup of every lattice to R2 (BACKUPS), 30-day retention.
  *   GET  /health
  * /mcp, /api and /admin require `Authorization: Bearer <key>`: the root JEV_API_KEY or a
  * tenant key issued by /admin/keys (worker/control.mjs).
@@ -29,7 +34,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { JEVLattice } from "../jev-core.js";
 import { createMcp, SERVER_INFO, isMutating } from "../mcp-core.mjs";
-import { authenticate, limitFailedAuth, canAccessLattice, hasScope, toolScope, rateLimit, createKey, listKeys, revokeKey, listKeyEvents, PROVIDERS, defaultSettings, mergeSettings } from "./control.mjs";
+import { registerLattice, listLattices, authenticate, limitFailedAuth, canAccessLattice, hasScope, toolScope, rateLimit, createKey, listKeys, revokeKey, listKeyEvents, PROVIDERS, defaultSettings, mergeSettings } from "./control.mjs";
 import { createJev } from "../providers/jev.mjs";
 import { createMiniMax, MINIMAX_FAST_MODEL } from "../providers/minimax.mjs";
 import { createWorkersAI } from "../providers/workers-ai.mjs";
@@ -97,6 +102,40 @@ export class LatticeDO extends DurableObject {
     this.mcp = createMcp({ lattice: this.lattice, jev, mm, small, predicates, senses, extraTools, persist: () => this.persist() });
   }
 
+  /** The Worker passes the lattice name with every call (a DO cannot recover it from its id). */
+  async remember(name) {
+    if (!name || this.name === name) return;
+    this.name = name;
+    if ((await this.ctx.storage.get("name")) !== name) await this.ctx.storage.put("name", name);
+  }
+
+  /** Full snapshot for backup: state, settings, audit, watched state. */
+  async backup() {
+    this.ensureAudit();
+    return {
+      schema: "jev-lattice-backup/1",
+      lattice: this.name ?? (await this.ctx.storage.get("name")) ?? null,
+      at: new Date().toISOString(),
+      state: this.lattice.exportState(),
+      settings: this.settings,
+      auto_verify_state: (await this.ctx.storage.get("auto_verify_state")) ?? null,
+      audit: this.ctx.storage.sql.exec("SELECT * FROM audit ORDER BY seq").toArray()
+    };
+  }
+
+  /** Restore a backup: replaces state and settings; the audit log keeps its history and records the restore. */
+  async restore(b, principal = ROOT) {
+    if (b?.schema !== "jev-lattice-backup/1" || !b.state) return { ok: false, error: "not a jev-lattice backup" };
+    return this.audited(principal.id, "restore", async () => {
+      const r = this.lattice.importState(b.state);
+      if (!r.ok) return r;
+      if (b.settings) { this.settings = { ...defaultSettings(this.env), ...b.settings }; await this.ctx.storage.put("settings", this.settings); this.buildMcp(); }
+      if (b.auto_verify_state) await this.ctx.storage.put("auto_verify_state", b.auto_verify_state);
+      await this.persist();
+      return { ok: true, restored_from: b.at, nodes: r.nodes };
+    });
+  }
+
   ctxFor(principal = ROOT) {
     return {
       allow: n => hasScope(principal, toolScope(n)) || `${n} needs scope "${toolScope(n)}"`,
@@ -133,9 +172,13 @@ export class LatticeDO extends DurableObject {
 
   /** Run a mutation and record which verdicts it moved, with the proofs that moved them. */
   async audited(actor, tool, fn, okOf = r => r?.ok !== false) {
-    const before = this.snapshot();
+    // every verdict change goes through here, so the last "after" is the next "before"
+    // (halves the cost per call on large lattices). Proof expiry by age can move a verdict
+    // between calls; it is then attributed to the next call, which is noted in the docs.
+    const before = this.lastSnapshot ?? this.snapshot();
     const r = await fn();
     const after = this.snapshot();
+    this.lastSnapshot = after;
     const changes = [];
     let newProofs = 0;
     for (const id of new Set([...before.keys(), ...after.keys()])) {
@@ -183,6 +226,7 @@ export class LatticeDO extends DurableObject {
   }
 
   async putSettings(patch, principal = ROOT) {
+    await this.remember(principal.lattice);
     const m = mergeSettings(this.settings, patch);
     if (!m.ok) return m;
     await this.audited(principal.id, "settings", async () => {
@@ -222,6 +266,11 @@ export class LatticeDO extends DurableObject {
     for (let i = 0; i < dels.length; i += 128) await this.ctx.storage.delete(dels.slice(i, i + 128).map(id => `node:${id}`));
     // debounce the idle cycle: it runs IDLE_MS after the last write
     if (rearm) await this.ctx.storage.setAlarm(Date.now() + IDLE_MS);
+    // keep the lattice registry (backup work list) current, at most once a minute
+    if (this.name && (!this.registeredAt || Date.now() - this.registeredAt > 60e3)) {
+      this.registeredAt = Date.now();
+      await registerLattice(this.env, this.name).catch(e => console.error(JSON.stringify({ event: "registry_error", lattice: this.name, error: e.message })));
+    }
   }
 
   /** Idle cycle — the "sleep" phase: consolidate, then optionally re-verify. */
@@ -255,11 +304,13 @@ export class LatticeDO extends DurableObject {
 
   /** Test/ops hook: run the idle cycle now instead of waiting for the alarm. */
   async runIdleCycle(principal = ROOT) {
+    await this.remember(principal.lattice);
     await this.audited(principal.id, "idle_cycle", () => this.alarm());
     return { ok: true, ...(await this.ctx.storage.get("last_idle_cycle")) };
   }
 
   async rpc(msg, principal = ROOT) {
+    await this.remember(principal.lattice);
     const ctx = this.ctxFor(principal);
     const name = msg?.method === "tools/call" ? msg.params?.name : null;
     if (name && isMutating(name) && ctx.allow(name) === true) {
@@ -269,6 +320,7 @@ export class LatticeDO extends DurableObject {
   }
 
   async tool(name, args, principal = ROOT) {
+    await this.remember(principal.lattice);
     const r = await this.rpc({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }, principal);
     return r.error ? { ok: false, error: r.error.message } : r.result.structuredContent ?? { ok: false, error: r.result.content?.[0]?.text };
   }
@@ -279,6 +331,7 @@ export class LatticeDO extends DurableObject {
    * unchanged questions are served from the proof cache.
    */
   async setAutoVerify(state, principal = ROOT) {
+    await this.remember(principal.lattice);
     return this.audited(principal.id, "auto_verify", () => this._setAutoVerify(state));
   }
 
@@ -296,6 +349,7 @@ export class LatticeDO extends DurableObject {
   }
 
   async info(principal = ROOT) {
+    await this.remember(principal.lattice);
     return {
       ok: true,
       stats: this.lattice.stats(),
@@ -353,10 +407,61 @@ async function readCapped(req, max) {
 const result = r => json(r, r?.ok === false ? (/^forbidden/.test(r.error || "") ? 403 : /^quota/.test(r.error || "") ? 429 : 400) : 200);
 
 /** Key management: root only. */
+const BACKUP_RETENTION_DAYS = 30;
+
+async function gzipJson(obj) {
+  return new Response(new Blob([JSON.stringify(obj)]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer();
+}
+async function gunzipJson(body) {
+  return JSON.parse(await new Response(body.pipeThrough(new DecompressionStream("gzip"))).text());
+}
+
+/** Back up every registered lattice to R2: lattices/<name>/<ISO time>.json.gz, then prune old ones. */
+export async function backupAll(env) {
+  if (!env.BACKUPS) return { ok: false, error: "no BACKUPS R2 binding" };
+  const names = await listLattices(env);
+  const out = { ok: true, at: new Date().toISOString(), backed_up: 0, failed: [], pruned: 0 };
+  for (const { name } of names) {
+    try {
+      const stub = env.LATTICE.get(env.LATTICE.idFromName(name));
+      await stub.remember(name);
+      const b = await stub.backup();
+      const key = `lattices/${name}/${b.at.replace(/[:.]/g, "-")}.json.gz`;
+      await env.BACKUPS.put(key, await gzipJson(b), { httpMetadata: { contentType: "application/json", contentEncoding: "gzip" }, customMetadata: { nodes: String(b.state.nodes.length), audit_rows: String(b.audit.length) } });
+      out.backed_up++;
+      const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 86400e3;
+      const listed = await env.BACKUPS.list({ prefix: `lattices/${name}/` });
+      const old = listed.objects.filter(o => o.uploaded.getTime() < cutoff).map(o => o.key);
+      if (old.length) { await env.BACKUPS.delete(old); out.pruned += old.length; }
+    } catch (e) {
+      out.failed.push({ name, error: e.message });
+    }
+  }
+  console.log(JSON.stringify({ event: "backup", ...out }));
+  return out;
+}
+
 async function handleAdmin(req, env, principal, parts) {
   if (!principal.root) return json({ ok: false, error: "forbidden: key management needs the root key" }, 403);
   if (!env.CONTROL) return json({ ok: false, error: "no CONTROL D1 binding configured" }, 501);
   const ip = req.headers.get("cf-connecting-ip");
+  if (parts[1] === "lattices" && req.method === "GET") return json({ ok: true, lattices: await listLattices(env) });
+  if (parts[1] === "backup" && req.method === "POST") return json(await backupAll(env));
+  if (parts[1] === "backups" && parts[2] && req.method === "GET") {
+    if (!env.BACKUPS) return json({ ok: false, error: "no BACKUPS R2 binding" }, 501);
+    const l = await env.BACKUPS.list({ prefix: `lattices/${parts[2]}/`, include: ["customMetadata"] });
+    return json({ ok: true, backups: l.objects.map(o => ({ key: o.key, size: o.size, uploaded: o.uploaded, ...o.customMetadata })) });
+  }
+  if (parts[1] === "restore" && parts[2] && req.method === "POST") {
+    if (!env.BACKUPS || !NAME_RE.test(parts[2])) return json({ ok: false, error: "bad lattice or no BACKUPS binding" }, 400);
+    const { key } = (await req.json().catch(() => ({}))) || {};
+    if (typeof key !== "string" || !key.startsWith(`lattices/${parts[2]}/`)) return json({ ok: false, error: "key must be one of this lattice's backups" }, 400);
+    const obj = await env.BACKUPS.get(key);
+    if (!obj) return json({ ok: false, error: "backup not found" }, 404);
+    const stub = env.LATTICE.get(env.LATTICE.idFromName(parts[2]));
+    const r = await stub.restore(await gunzipJson(obj.body), { ...principal, lattice: parts[2] });
+    return json(r, r.ok ? 200 : 400);
+  }
   if (parts[1] === "events" && req.method === "GET") return json(await listKeyEvents(env, Number(new URL(req.url).searchParams.get("limit")) || 100));
   if (parts[1] !== "keys") return json({ ok: false, error: "not found" }, 404);
   if (req.method === "POST" && !parts[2]) {
@@ -371,8 +476,40 @@ async function handleAdmin(req, env, principal, parts) {
   return json({ ok: false, error: "not found" }, 404);
 }
 
+/** One Analytics Engine data point per API request (absent binding → no-op). */
+function metric(env, { route, lattice, tenant, status, ms, tool }) {
+  try {
+    env.METRICS?.writeDataPoint({ blobs: [route, lattice || "", tenant || "", String(status), tool || ""], doubles: [ms, status >= 500 ? 1 : 0], indexes: [tenant || "anon"] });
+  } catch { /* metrics never break requests */ }
+}
+
 export default {
-  async fetch(req, env) {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(backupAll(env));
+  },
+
+  async fetch(req, env, ctx) {
+    const t0 = Date.now();
+    const rid = crypto.randomUUID();
+    let res;
+    try {
+      res = await route(req, { ...env, waitUntil: p => ctx?.waitUntil?.(p) });
+    } catch (e) {
+      console.error(JSON.stringify({ event: "unhandled", rid, path: new URL(req.url).pathname, error: e.message, stack: e.stack?.split("\n").slice(0, 4) }));
+      res = json({ ok: false, error: "internal error", request_id: rid }, 500);
+    }
+    const parts = new URL(req.url).pathname.split("/").filter(Boolean);
+    if (["mcp", "api", "admin"].includes(parts[0])) {
+      metric(env, { route: parts[0] === "api" ? `api/${parts[2] || ""}` : parts[0], lattice: parts[1], status: res.status, ms: Date.now() - t0, tool: parts[0] === "api" && parts[2] === "tool" ? parts[3] : null });
+      res = new Response(res.body, res);
+      res.headers.set("x-request-id", rid);
+    }
+    return res;
+  }
+};
+
+async function route(req, env) {
+  {
     const url = new URL(req.url);
     const parts = url.pathname.split("/").filter(Boolean);
 
@@ -386,7 +523,7 @@ export default {
         if (!lim.ok) return json({ ok: false, error: lim.error }, 429, { "retry-after": "10" });
         return json({ ok: false, error: auth.error }, auth.status, { "www-authenticate": "Bearer" });
       }
-      const principal = auth.principal;
+      let principal = auth.principal;
       // bound request size before parsing: the declared length, and the actual bytes (chunked uploads have none)
       const max = Number(env.JEV_MAX_BODY_BYTES) || 4 * 1024 * 1024;
       if (Number(req.headers.get("content-length") || 0) > max) return json({ ok: false, error: `request body exceeds ${max} bytes` }, 413);
@@ -401,6 +538,7 @@ export default {
       const name = parts[0] === "mcp" ? parts[1] || "default" : parts[1];
       if (!name || !NAME_RE.test(name)) return json({ ok: false, error: "bad lattice name" }, 400);
       if (!canAccessLattice(principal, name)) return json({ ok: false, error: `this key cannot access lattice "${name}"` }, 403);
+      principal = { ...principal, lattice: name };
       const limited = await rateLimit(env, principal);
       if (!limited.ok) return json({ ok: false, error: limited.error }, 429, { "retry-after": "60" });
       const stub = env.LATTICE.get(env.LATTICE.idFromName(name));
@@ -426,4 +564,5 @@ export default {
     }
     return env.ASSETS.fetch(req);
   }
-};
+}
+

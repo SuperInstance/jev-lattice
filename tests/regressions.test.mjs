@@ -193,7 +193,9 @@ test("import sanitizes malformed spatial coordinates", () => {
   const L = new JEVLattice();
   L.importState({ nodes: [{ id: "a", text: "a", spatial_coordinate: [1] }, { id: "b", text: "b", spatial_coordinate: "x" }] });
   assert.deepEqual(L.getNode("a").spatial_coordinate, [1, 0]);
-  assert.deepEqual(L.getNode("b").spatial_coordinate, [0, 0]);
+  const b = L.getNode("b").spatial_coordinate; // not an array → placed by its text (0.9)
+  assert.equal(b.length, 2);
+  assert.ok(b.every(Number.isFinite));
   assert.equal(L.consolidate({}).ok, true);
 });
 
@@ -303,4 +305,21 @@ test("consolidate scales: 5,000 spread nodes well under a second-scale budget; d
   const maxOut = Math.max(...L.listNodes().map(n => n.transition_probabilities.length));
   assert.ok(maxOut <= 2 * 16 + 4, `out-degree ${maxOut} stays near the maxDegree cap`);
   assert.equal(r.ok, true);
+});
+
+test("regression (0.9): imported nodes without coordinates are placed by text, so consolidate does not merge them", async () => {
+  const { JEVLattice } = await import("../jev-core.js");
+  const L = new JEVLattice();
+  L.importState({ nodes: [
+    { id: "a", node_type: "OBSERVATION", text: "Redis has TLS enabled" },
+    { id: "b", node_type: "OBSERVATION", text: "nginx sends HSTS" },
+    { id: "c", node_type: "OBSERVATION", text: "debug is off" }
+  ] });
+  const coords = L.listNodes().map(n => n.spatial_coordinate.join(","));
+  assert.equal(new Set(coords).size, 3, "distinct positions");
+  L.consolidate({});
+  assert.equal(L.listNodes().length, 3, "no observation merged away");
+  const kept = new JEVLattice();
+  kept.importState({ nodes: [{ id: "x", text: "t", spatial_coordinate: [0.5, -0.25] }] });
+  assert.deepEqual(kept.getNode("x").spatial_coordinate, [0.5, -0.25], "explicit positions are kept");
 });

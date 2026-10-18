@@ -58,12 +58,17 @@ jobs:
       - run: node experiments/live-compile.mjs
 
   deploy:
+    # main → staging → smoke test → production. Give the "production" environment required
+    # reviewers in the repository settings to make the last step a manual approval.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [test, browser]
     runs-on: ubuntu-latest
+    environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      STAGING_KEY: ${{ secrets.JEV_STAGING_KEY }}
+      STAGING_URL: ${{ vars.JEV_STAGING_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -71,6 +76,12 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Deploy (skipped when CLOUDFLARE_API_TOKEN is not configured)
+      - name: Deploy staging (skipped when CLOUDFLARE_API_TOKEN is not configured)
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npm run deploy:staging
+      - name: Smoke test staging (needs JEV_STAGING_KEY secret and JEV_STAGING_URL variable)
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.STAGING_KEY != '' && env.STAGING_URL != ''
+        run: node scripts/smoke-worker.mjs "$STAGING_URL" "$STAGING_KEY"
+      - name: Deploy production
         if: env.CLOUDFLARE_API_TOKEN != ''
         run: npm run deploy

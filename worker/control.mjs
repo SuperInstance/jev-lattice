@@ -51,8 +51,16 @@ export function ensureSchema(db) {
     // append-only record of key management (who issued / revoked what, from where)
     db.prepare(`CREATE TABLE IF NOT EXISTS key_events (
       seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, action TEXT NOT NULL, key_id TEXT NOT NULL,
-      tenant TEXT, detail TEXT, ip TEXT)`)
-  ]).catch(e => { schemaReady = null; throw e; });
+      tenant TEXT, detail TEXT, ip TEXT)`),
+    // every lattice that has ever been written: the backup job's work list
+    db.prepare(`CREATE TABLE IF NOT EXISTS lattices (name TEXT PRIMARY KEY, created_at TEXT NOT NULL, last_write_at TEXT NOT NULL)`)
+  ]).then(async r => {
+    // additive migrations for databases created by older versions
+    for (const col of ["expires_at TEXT", "last_used_at TEXT"]) {
+      try { await db.prepare(`ALTER TABLE api_keys ADD COLUMN ${col}`).run(); } catch { /* already there */ }
+    }
+    return r;
+  }).catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
 
@@ -75,6 +83,12 @@ export async function authenticate(req, env) {
   const hash = await sha256Hex(m[2]);
   const row = await env.CONTROL.prepare("SELECT * FROM api_keys WHERE id = ? AND revoked_at IS NULL").bind(m[1]).first();
   if (!constantTimeEqual(hash, row?.key_hash || "0".repeat(64)) || !row) return { ok: false, status: 401, error: "invalid token" };
+  if (row.expires_at && Date.parse(row.expires_at) <= Date.now()) return { ok: false, status: 401, error: "token expired" };
+  // last-used, at most once an hour per key (keeps D1 writes off the hot path)
+  if (!row.last_used_at || Date.now() - Date.parse(row.last_used_at) > 3600e3) {
+    const touch = env.CONTROL.prepare("UPDATE api_keys SET last_used_at = ? WHERE id = ?").bind(new Date().toISOString(), row.id).run().catch(() => {});
+    if (env.waitUntil) env.waitUntil(touch); else await touch;
+  }
   let scopes, lattices;
   try {
     scopes = JSON.parse(row.scopes);
@@ -110,24 +124,26 @@ const randomString = (n, alphabet) => {
   return [...bytes].map(b => alphabet[b % alphabet.length]).join("");
 };
 
-export async function createKey(env, { tenant, scopes = ["read"], lattices, profile = null, label = null } = {}, { ip = null } = {}) {
+export async function createKey(env, { tenant, scopes = ["read"], lattices, profile = null, label = null, expires_in_days = null } = {}, { ip = null } = {}) {
   if (!tenant || !/^[a-z0-9-]{1,40}$/.test(tenant)) return { ok: false, error: "tenant: lowercase letters, digits, dashes (≤ 40)" };
   if (!Array.isArray(scopes) || !scopes.length || !scopes.every(s => SCOPES.includes(s))) return { ok: false, error: `scopes: subset of ${SCOPES.join(", ")}` };
   const pats = Array.isArray(lattices) && lattices.length ? lattices.map(String) : [`${tenant}-*`];
   if (!pats.every(p => /^[a-zA-Z0-9_*-]{1,64}$/.test(p))) return { ok: false, error: "lattices: name patterns like acme-* or shared" };
   if (profile !== null && !PROFILES[profile]) return { ok: false, error: `profile: null or one of ${Object.keys(PROFILES).join(", ")}` };
+  if (expires_in_days !== null && !(Number.isFinite(expires_in_days) && expires_in_days > 0 && expires_in_days <= 3650)) return { ok: false, error: "expires_in_days: a number in (0, 3650]" };
+  const expires_at = expires_in_days ? new Date(Date.now() + expires_in_days * 86400e3).toISOString() : null;
   await ensureSchema(env.CONTROL);
   const id = randomString(12, "abcdefghijklmnopqrstuvwxyz0123456789");
   const secret = randomString(40, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
-  await env.CONTROL.prepare("INSERT INTO api_keys (id, key_hash, tenant, scopes, lattices, profile, label, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-    .bind(id, await sha256Hex(secret), tenant, JSON.stringify(scopes), JSON.stringify(pats), profile, label, new Date().toISOString()).run();
-  await keyEvent(env, "create", id, tenant, { scopes, lattices: pats, profile, label }, ip);
-  return { ok: true, id, key: `jev_${id}_${secret}`, tenant, scopes, lattices: pats, profile, note: "store this key now; only its hash is kept" };
+  await env.CONTROL.prepare("INSERT INTO api_keys (id, key_hash, tenant, scopes, lattices, profile, label, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+    .bind(id, await sha256Hex(secret), tenant, JSON.stringify(scopes), JSON.stringify(pats), profile, label, new Date().toISOString(), expires_at).run();
+  await keyEvent(env, "create", id, tenant, { scopes, lattices: pats, profile, label, expires_at }, ip);
+  return { ok: true, id, key: `jev_${id}_${secret}`, tenant, scopes, lattices: pats, profile, expires_at, note: "store this key now; only its hash is kept" };
 }
 
 export async function listKeys(env) {
   await ensureSchema(env.CONTROL);
-  const { results } = await env.CONTROL.prepare("SELECT id, tenant, scopes, lattices, profile, label, created_at, revoked_at FROM api_keys ORDER BY created_at DESC").all();
+  const { results } = await env.CONTROL.prepare("SELECT id, tenant, scopes, lattices, profile, label, created_at, revoked_at, expires_at, last_used_at FROM api_keys ORDER BY created_at DESC").all();
   return { ok: true, keys: results.map(r => ({ ...r, scopes: JSON.parse(r.scopes), lattices: JSON.parse(r.lattices) })) };
 }
 
@@ -178,4 +194,18 @@ export function mergeSettings(current, patch) {
     } else return { ok: false, error: `unknown setting: ${k}` };
   }
   return { ok: true, settings: out };
+}
+
+// ---------- lattice registry (backup work list) ----------
+export async function registerLattice(env, name) {
+  if (!env.CONTROL) return;
+  await ensureSchema(env.CONTROL);
+  const now = new Date().toISOString();
+  await env.CONTROL.prepare("INSERT INTO lattices (name, created_at, last_write_at) VALUES (?, ?, ?) ON CONFLICT(name) DO UPDATE SET last_write_at = excluded.last_write_at").bind(name, now, now).run();
+}
+export async function listLattices(env) {
+  if (!env.CONTROL) return [];
+  await ensureSchema(env.CONTROL);
+  const { results } = await env.CONTROL.prepare("SELECT name, created_at, last_write_at FROM lattices ORDER BY name").all();
+  return results;
 }

@@ -1,6 +1,6 @@
 # Production readiness, deployment and packaging
 
-Status as of v0.7.0. (v0.7 completed the P0 list from the v0.6 review; §4 records how each item was done.) This document gives an honest split between what is production-grade, what is beta and what is research, followed by the deployment shape, the packaging plan, and the remaining work, in priority order.
+Status as of v0.9.0. (v0.7 completed the P0 list from the v0.6 review; v0.9 completed most of P1. §4 records how each item was done. Operations: [RUNBOOK.md](RUNBOOK.md).) This document gives an honest split between what is production-grade, what is beta and what is research, followed by the deployment shape, the packaging plan, and the remaining work, in priority order.
 
 ## 1. What is production-grade, beta, or research
 
@@ -11,7 +11,7 @@ Status as of v0.7.0. (v0.7 completed the P0 list from the v0.6 review; §4 recor
 | `jev gate` CLI + GitHub Action | **production (new)** | Fails closed (missing files, verifier errors and OPEN are all not-GO); state persisted between runs; tested with a fake verifier and live against Jev |
 | MCP core + stdio server | **production** | Protocol negotiation, argument validation against each tool's schema, tool profiles, per-request authorisation hooks, atomic persistence, end-to-end tests |
 | Jev provider | **production** | Retries/backoff on 429/529/5xx, timeouts, long-context option, model pinning (`JEV_MODEL`) |
-| Cloudflare Worker / Durable Object | **beta → production candidate** | Tenant keys with scopes, per-key rate limits, quotas, an audit log of verdict changes, per-lattice provider allowlists; 49 live smoke checks. Still missing before GA: backups, metrics, staging environment (P1) |
+| Cloudflare Worker / Durable Object | **production candidate** | Tenant keys with scopes and expiry, rate limits, quotas, an audit log, provider allowlists, daily R2 backups with a tested restore, staging → production pipeline, metrics and request ids, load-tested at 5000 nodes. Remaining: an incident drill with real traffic, and an SLO |
 | Edge predicates (Dynamic Workers) | **beta** | Depends on a Cloudflare open-beta API |
 | Cross-sense teaching (`experimental/senses`) | **beta** | Measured safe (0 wrong GOs with the floor); teacher error rate → tolerance is now automatic (`teacherErrorRate`, R5-C), safe up to ~5% teacher noise |
 | Compiled predicates (`experimental/compiled`), calibration maps, `compile`/`decompose` (MiniMax) | **research** | Metamorphic acceptance and code regeneration are now built in (R5-A); still model-written code, not part of the v1 API |
@@ -69,14 +69,17 @@ Three distribution tiers share one core. Each tier is useful on its own; adoptio
 | API freeze | `experimental/*` exports; `types/*.d.ts` + `npm run typecheck`; `conformance/gate-vectors.json` + runner. | `tests/types.test.mjs`, `tests/conformance.test.mjs` |
 | Model pinning | `JEV_MODEL` (Worker var `jev-1.13.0`, Action input `model`, CLI/stdio env). MiniMax: a fallback chain on unknown-model errors (status 2013), Flash → M3. *Measured reason* (R5-E): 1.13.0 → 1.14.0 flips 4.7–6.2% of verdicts, 2–2.5× the re-ask rate, with 3× the mean change in p. | `experiments/results/model-upgrade-s*.json` |
 
-### P1
-- **Observability:** structured logs and Workers Analytics Engine metrics: verdicts, fragile rate, provider latency, errors, cost, cache hit rate.
-- **Backups:** a scheduled export of every Durable Object's state to R2. **Environments:** `staging` and `production` in `wrangler.jsonc`, with gradual deployments.
-- **Incremental consolidation**, bounded per alarm, instead of whole-lattice passes.
-- **Load test** the Durable Object: concurrent MCP sessions on one lattice, a large `verify_files` batch, storage at about 10k nodes.
-
-- **Audit export:** stream audit rows to R2 or a customer sink; today they live (and die) with the Durable Object.
-- **Key rotation UX:** expiry dates and last-used timestamps on keys.
+### P1: status after v0.9
+| Item | Status |
+|---|---|
+| Backups | **done**: daily cron to R2 (state, settings, watched state, audit), 30-day retention, admin restore; the smoke test runs a backup → wipe → restore drill on every deploy |
+| Environments | **done**: `env.staging` with its own D1, R2, rate-limit namespace and metrics dataset; CI deploys main → staging → smoke test → production |
+| Observability | **done**: Analytics Engine data point per request; `x-request-id`; JSON logs of unhandled errors. *Not yet:* dashboards and alerts on top of the dataset |
+| Load test | **done**: `scripts/load-worker.mjs` (results in RUNBOOK.md). It found the import-coordinate bug (a 13× consolidate speedup and a data-loss fix) |
+| Incremental consolidation | **superseded**: after the fixes, consolidate on 5000 nodes takes 0.26 s locally |
+| Audit export | **done** as part of backups (R2) |
+| Key rotation UX | **done**: `expires_in_days`, `last_used_at` |
+| npm with provenance | **ready**: the `release` workflow needs the repository secret `NPM_TOKEN` (0.8.0 was published from a workstation, without provenance) |
 
 ### P2
 - Run Choice-first grouping automatically inside `jev gate` (the module and its auto-trigger exist; the CLI does not call them yet).
