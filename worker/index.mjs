@@ -29,6 +29,7 @@ import { createWorkersAI } from "../providers/workers-ai.mjs";
 import { verifyOpenGates, invalidateStale } from "../orchestrator.mjs";
 import { cachedJev, createProofCache, durableObjectStore } from "../proof-cache.mjs";
 import { createEdgePredicates } from "./predicates.mjs";
+import { createSenseSuite } from "../senses.mjs";
 
 const IDLE_MS = 10 * 60 * 1000;
 const AUTO_CHANNEL = "auto-verify";
@@ -70,7 +71,9 @@ export class LatticeDO extends DurableObject {
     this.jev = jev;
     // Dynamic Workers sandbox for compiled predicates (open beta; absent binding → tools hidden)
     const predicates = env.LOADER ? createEdgePredicates({ loader: env.LOADER, storage: ctx.storage }) : null;
-    this.mcp = createMcp({ lattice: this.lattice, jev, mm, small, predicates, persist: () => this.persist() });
+    // cross-sense teaching: label bank + paraphrase cache live in this lattice's DO storage
+    const senses = jev ? createSenseSuite({ jev, mm, small, predicates, store: durableObjectStore(ctx.storage, "sense:"), rules: env.JEV_READING_RULES || null }) : null;
+    this.mcp = createMcp({ lattice: this.lattice, jev, mm, small, predicates, senses, persist: () => this.persist() });
   }
 
   async load() {

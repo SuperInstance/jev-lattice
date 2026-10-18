@@ -101,5 +101,12 @@ export function createEdgePredicates({ loader, storage }) {
     return { ok: true, answer, latency_ms, proof: added.proof, gate: lattice.evaluateGoNoGo(nodeId) };
   }
 
-  return { register, get, proof };
+  /** Run a stored predicate on text → true | false | null (threw). */
+  async function run(entry, text) {
+    const iso = await compileInIsolate(entry.code);
+    const [answer] = await iso.runMany([text]);
+    return answer;
+  }
+
+  return { register, get, proof, run };
 }

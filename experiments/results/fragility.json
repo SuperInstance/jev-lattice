@@ -1,0 +1,139 @@
+{
+  "at": "2026-10-18T05:13:34.658Z",
+  "CONFIGS": 16,
+  "R": 5,
+  "report": {
+    "0.8": {
+      "bins": [
+        {
+          "band": [
+            0,
+            0.02
+          ],
+          "n": 1,
+          "flips": 1,
+          "rate": 1
+        },
+        {
+          "band": [
+            0.02,
+            0.05
+          ],
+          "n": 2,
+          "flips": 0,
+          "rate": 0
+        },
+        {
+          "band": [
+            0.05,
+            0.1
+          ],
+          "n": 8,
+          "flips": 0,
+          "rate": 0
+        },
+        {
+          "band": [
+            0.1,
+            1.01
+          ],
+          "n": 149,
+          "flips": 0,
+          "rate": 0
+        }
+      ],
+      "decided": 158,
+      "fragileFlag": 0,
+      "flipsOfDecided": 0,
+      "flaggedFlips": 0
+    },
+    "0.9": {
+      "bins": [
+        {
+          "band": [
+            0,
+            0.02
+          ],
+          "n": 6,
+          "flips": 3,
+          "rate": 0.5
+        },
+        {
+          "band": [
+            0.02,
+            0.05
+          ],
+          "n": 28,
+          "flips": 2,
+          "rate": 0.071
+        },
+        {
+          "band": [
+            0.05,
+            0.1
+          ],
+          "n": 124,
+          "flips": 0,
+          "rate": 0
+        },
+        {
+          "band": [
+            0.1,
+            1.01
+          ],
+          "n": 2,
+          "flips": 1,
+          "rate": 0.5
+        }
+      ],
+      "decided": 149,
+      "fragileFlag": 7,
+      "flipsOfDecided": 5,
+      "flaggedFlips": 5
+    },
+    "0.95": {
+      "bins": [
+        {
+          "band": [
+            0,
+            0.02
+          ],
+          "n": 42,
+          "flips": 9,
+          "rate": 0.214
+        },
+        {
+          "band": [
+            0.02,
+            0.05
+          ],
+          "n": 108,
+          "flips": 0,
+          "rate": 0
+        },
+        {
+          "band": [
+            0.05,
+            0.1
+          ],
+          "n": 6,
+          "flips": 0,
+          "rate": 0
+        },
+        {
+          "band": [
+            0.1,
+            1.01
+          ],
+          "n": 4,
+          "flips": 0,
+          "rate": 0
+        }
+      ],
+      "decided": 125,
+      "fragileFlag": 22,
+      "flipsOfDecided": 1,
+      "flaggedFlips": 1
+    }
+  }
+}

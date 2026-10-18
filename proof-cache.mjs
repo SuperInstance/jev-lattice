@@ -132,15 +132,42 @@ export function cachedJev(jev, cache, { canonicalState = true } = {}) {
     };
     items.forEach((it, i) => {
       const e = hits.get(keys[i]);
-      out[it.key] = e ? { p: e.p, cached: true, model: e.model } : { p: fresh[it.key].p, cached: false };
+      out[it.key] = e ? { p: e.p, cached: true, model: e.model, ...(e.spread !== undefined ? { spread: e.spread } : {}) } : { p: fresh[it.key].p, cached: false };
     });
     return out;
   }
 
   async function noul(state, instructions, criteria) {
     const r = await nouls(state, [{ key: "q", instructions, criteria }]);
-    return { p: r.q.p, model: r.q.model || r._model, latency_ms: r._latency_ms, cached: r.q.cached, state_hash: r._state_hash };
+    return { p: r.q.p, model: r.q.model || r._model, latency_ms: r._latency_ms, cached: r.q.cached, spread: r.q.spread, state_hash: r._state_hash };
   }
 
   return { ...jev, noul, nouls, cache, canonicalState, provider: "typesafe" };
+}
+
+/**
+ * Stability probe (T34): re-ask the SAME questions against the SAME state n times,
+ * bypassing the cache, and record the spread (max − min) per question. Written back
+ * onto the cache entry, so later proofs served from the cache carry the measured
+ * noise and the gate can tell a firm 0.97 from a fragile 0.91.
+ * `jev` must be the raw client (not cachedJev); `cache` is optional.
+ */
+export async function stabilityProbe(jev, state, items, { n = 5, cache = null, canonicalState = true } = {}) {
+  const sent = canonicalState ? JSON.parse(canonicalize(state)) : state;
+  const runs = await Promise.all(Array.from({ length: n }, () => jev.nouls(sent, items)));
+  const out = {};
+  for (const it of items) {
+    const ps = runs.map(r => r[it.key]?.p).filter(p => typeof p === "number");
+    const mean = ps.reduce((a, b) => a + b, 0) / (ps.length || 1);
+    out[it.key] = { samples: ps, mean: +mean.toFixed(4), spread: +(Math.max(...ps) - Math.min(...ps)).toFixed(4) };
+  }
+  if (cache) {
+    const h = await stateHash(state, { canonical: canonicalState });
+    for (const it of items) {
+      const key = await cache.keyFor({ provider: "typesafe", model: jev.model, state_hash: h, instructions: it.instructions, criteria: it.criteria });
+      const prev = (await cache.store.getMany([key])).get(key);
+      if (prev) await cache.store.setMany([[key, { ...prev, spread: out[it.key].spread, probe_n: n }]]);
+    }
+  }
+  return out;
 }

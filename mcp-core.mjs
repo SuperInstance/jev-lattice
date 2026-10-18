@@ -7,7 +7,7 @@
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.4.0" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.5.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -35,6 +35,8 @@ const SPEC_SCHEMA = {
     intent: { type: "string" },
     max_proof_age_ms: { type: "number" },
     allowed_sources: { type: "array", items: { type: "string" } },
+    reads: { type: "array", items: { type: "string" }, description: "Evidence files this question depends on (per-file drift; Jev sees only these)" },
+    blocked_sources: { type: "array", items: { type: "string" }, description: "Source types that may not count toward this gate" },
     block_on_conflict: { type: "boolean" },
     source_thresholds: { type: "object", additionalProperties: { type: "number" }, description: "Per source_type thresholds, e.g. {\"SMALL_MODEL\": 0.99}" }
   }
@@ -51,10 +53,10 @@ const STATE_ARG = {
 const MUTATING = new Set([
   "jev_ingest", "jev_add_proof", "jev_invalidate_proof", "jev_consolidate", "jev_import_state",
   "jev_boost", "jev_prune", "jev_verify", "jev_verify_open", "jev_minimax_proof", "jev_decompose",
-  "jev_rollup", "jev_compile", "jev_edge_proof", "jev_invalidate_stale", "jev_predicate_proof"
+  "jev_rollup", "jev_compile", "jev_edge_proof", "jev_invalidate_stale", "jev_predicate_proof", "jev_verify_files", "jev_teach", "jev_sense_probe", "jev_apply_learned"
 ]);
 
-export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false, hasPredicates = false } = {}) {
+export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false, hasPredicates = false, hasSenses = false } = {}) {
   const defs = [
     { name: "jev_ingest", description: "Ingest text as OBSERVATION or QUESTION. For questions pass question_spec (BINARY|COORDINATED) and optional initial proof.",
       inputSchema: { type: "object", properties: {
@@ -76,7 +78,7 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
     { name: "jev_boost", description: "Raise a node's salience.", inputSchema: { type: "object", properties: { id: { type: "string" }, delta: { type: "number" } }, required: ["id"] } },
     { name: "jev_prune", description: "Delete a node and its edges.", inputSchema: ID },
     { name: "jev_invalidate_stale", description: "Drift invalidation by content hash: retire proofs whose recorded evidence (in `channel`) differs from `state`. Proofs on unchanged evidence stay valid.",
-      inputSchema: { type: "object", properties: { state: STATE_ARG, channel: CHANNEL_ARG, reason: { type: "string" } }, required: ["state"] } },
+      inputSchema: { type: "object", properties: { state: STATE_ARG, files: { type: "object", additionalProperties: { type: "string" }, description: "Per-file form: retire proofs whose recorded file hashes changed" }, channel: CHANNEL_ARG, reason: { type: "string" } } } },
     { name: "jev_rollup", description: "Deterministic: if all child sub-questions are GO, add a cheap LATTICE_READ proof to the parent (or a refuting one if a child is REFUTED).", inputSchema: ID },
     { name: "jev_export_state", description: `Export full lattice JSON (schema ${SCHEMA}).`, inputSchema: EMPTY },
     { name: "jev_import_state", description: "Import lattice JSON state (replaces current).",
@@ -89,6 +91,8 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
     defs.push(
       { name: "jev_verify", description: "Ask TypeSafe Jev (calibrated System One model) whether a QUESTION holds given `state`; appends a cheap JEV_NOUL proof.",
         inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG, instructions: { type: "string" }, channel: CHANNEL_ARG }, required: ["id"] } },
+      { name: "jev_verify_files", description: "Per-file verification: `files` = {path: content}. Each open question sees only the files in its question_spec.reads; proofs record per-file hashes.",
+        inputSchema: { type: "object", properties: { files: { type: "object", additionalProperties: { type: "string" } }, ids: { type: "array", items: { type: "string" } }, rules: { type: "string" } }, required: ["files"] } },
       { name: "jev_verify_open", description: "Speculative fan-out: verify every open QUESTION against one shared `state` in a single Jev request. Answers are cached by (state hash, question) when a cache is configured.",
         inputSchema: { type: "object", properties: { state: STATE_ARG, ids: { type: "array", items: { type: "string" } }, channel: CHANNEL_ARG } } }
     );
@@ -116,6 +120,19 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
         inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, question: { type: "string" }, channel: CHANNEL_ARG }, required: ["id", "text"] } }
     );
   }
+  if (hasSenses) {
+    const FILES = { type: "object", additionalProperties: { type: "string" } };
+    defs.push(
+      { name: "jev_teach", description: "Cross-sense teaching: for each DECIDED question, run the weaker senses (jev-whole, jev-paraphrase, workers-ai, compiled) on the same `files` and bank (p, verdict) as a label.",
+        inputSchema: { type: "object", properties: { files: FILES, ids: { type: "array", items: { type: "string" } }, senses: { type: "array", items: { type: "string" } }, rules: { type: "string" } }, required: ["files"] } },
+      { name: "jev_sense_report", description: "Per question × sense: accuracy and Brier against teacher labels, and the learned safe threshold (or why there is none).",
+        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" } } } },
+      { name: "jev_sense_probe", description: "Run senses with no teacher; return p per question per sense. addProofs=true appends SENSE:<name> proofs.",
+        inputSchema: { type: "object", properties: { files: FILES, ids: { type: "array", items: { type: "string" } }, senses: { type: "array", items: { type: "string" } }, addProofs: { type: "boolean" }, rules: { type: "string" } }, required: ["files"] } },
+      { name: "jev_apply_learned", description: "Write learned per-sense thresholds into each question's spec (source_thresholds) and block senses with no safe threshold (blocked_sources).",
+        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" } } } }
+    );
+  }
   if (hasJev || hasMiniMax) {
     defs.push({ name: "jev_compile", description: "Progressive compilation for one question: Jev first → MiniMax CoT → decompose + Jev fan-out → roll-up. Stops when decided.",
       inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG }, required: ["id"] } });
@@ -130,13 +147,14 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
  * @param {object} [o.mm]   providers/minimax.mjs client
  * @param {object} [o.small] small/edge model client with json() (Workers AI)
  * @param {object} [o.predicates] sandboxed compiled-predicate store (worker/predicates.mjs)
+ * @param {object} [o.senses] cross-sense teaching suite (senses.mjs createSenseSuite)
  * @param {() => object} [o.capacity]  harness snapshot fn (Node only)
  * @param {() => object} [o.consolidateOpts]
  * @param {() => Promise<void>|void} [o.persist] called after mutating tools
  */
-export function createMcp({ lattice, jev = null, mm = null, small = null, predicates = null, capacity = null, consolidateOpts = () => ({}), persist = null }) {
+export function createMcp({ lattice, jev = null, mm = null, small = null, predicates = null, senses = null, capacity = null, consolidateOpts = () => ({}), persist = null }) {
   const tools = createToolRegistry(lattice);
-  const defs = toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small, hasPredicates: !!predicates });
+  const defs = toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small, hasPredicates: !!predicates, hasSenses: !!senses });
   const names = new Set(defs.map(d => d.name));
 
   async function callTool(name, args = {}) {
@@ -152,7 +170,12 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
         const st = capacity ? { ...tools.stats(), capacity: capacity() } : tools.stats();
         return jev?.cache ? { ...st, proofCache: { ...jev.cache.stats, ttlMs: jev.cache.ttlMs } } : st;
       }
-      case "jev_invalidate_stale": return orch.invalidateStale(lattice, { state: args.state, channel: args.channel, reason: args.reason });
+      case "jev_invalidate_stale": {
+        // file-map form: { files } → per-file invalidation; otherwise whole-state hash
+        if (args.files) return orch.invalidateChangedFiles(lattice, { files: args.files, reason: args.reason });
+        return orch.invalidateStale(lattice, { state: args.state, channel: args.channel, reason: args.reason });
+      }
+      case "jev_verify_files": return orch.verifyFiles(lattice, { jev, files: args.files, ids: args.ids, rules: args.rules });
       case "jev_list_nodes":
         return { ok: true, nodes: lattice.listNodes().map(n => lattice._nodeSummary(n)).map(s => ({ ...s, verdict: s.node_type === "QUESTION" ? lattice.evaluateGoNoGo(s.id).verdict : undefined })) };
       case "jev_get_node": return tools.getNode({ id: args.id });
@@ -167,6 +190,10 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
       case "jev_minimax_proof": return orch.proveWithMiniMax(lattice, args.id, { mm, state: args.state });
       case "jev_decompose": return orch.decompose(lattice, args.id, { mm, maxSub: args.maxSub });
       case "jev_compile": return orch.compile(lattice, args.id, { jev, mm, state: args.state });
+      case "jev_teach": return senses.teach(lattice, args);
+      case "jev_sense_report": return senses.report(lattice, args);
+      case "jev_sense_probe": return senses.probe(lattice, args);
+      case "jev_apply_learned": return senses.apply(lattice, args);
       case "jev_predicate_register": return predicates.register(args);
       case "jev_predicate_proof": return predicates.proof(lattice, args.id, { text: args.text, question: args.question, channel: args.channel });
       case "jev_edge_proof":

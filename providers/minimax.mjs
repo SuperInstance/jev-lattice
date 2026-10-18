@@ -6,12 +6,16 @@
  * Works in Node >=18, browsers, and Cloudflare Workers (fetch only).
  *
  * CLI:
- *   MINIMAX_TOKEN=... node providers/minimax.mjs [--model MiniMax-M3] [--system "..."] "prompt" [file ...]
+ *   MINIMAX_TOKEN=... node providers/minimax.mjs [--model MiniMax-M3 | --think] [--system "..."] "prompt" [file ...]
+ *   default model: MiniMax-M3.1-Flash-Preview; --think uses MiniMax-M3
  *   Files are appended to the prompt; stdin is used when no prompt is given.
  */
 
-export const MINIMAX_DEFAULT_MODEL = "MiniMax-M3";
-export const MINIMAX_FAST_MODEL = "MiniMax-M2.7-highspeed";
+// Default for everyday work (decompose, paraphrase, predicates, JSON); not listed by
+// /v1/models but served. M3 is reserved for "big thinking" (design, ideation, review).
+export const MINIMAX_FAST_MODEL = "MiniMax-M3.1-Flash-Preview";
+export const MINIMAX_THINK_MODEL = "MiniMax-M3";
+export const MINIMAX_DEFAULT_MODEL = MINIMAX_FAST_MODEL;
 const DEFAULT_BASE = "https://api.minimax.io/v1";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -94,6 +98,7 @@ export function createMiniMax({
         };
       } catch (e) {
         lastErr = e;
+        if (e.name === "AbortError") e.message = `MiniMax request exceeded ${timeoutMs} ms (raise timeoutMs / MINIMAX_TIMEOUT_MS for long generations)`;
         if (e.name !== "AbortError" && !/transient|fetch failed/i.test(e.message)) throw e;
         await sleep(1000 * 2 ** attempt);
       }
@@ -129,17 +134,19 @@ if (isMain) {
   const files = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--model") model = args[++i];
+    else if (args[i] === "--think") model = MINIMAX_THINK_MODEL;
     else if (args[i] === "--system") system = args[++i];
     else if (prompt === undefined) prompt = args[i];
     else files.push(args[i]);
   }
   if (prompt === undefined) prompt = readFileSync(0, "utf8");
   for (const f of files) prompt += `\n\n----- FILE: ${f} -----\n${readFileSync(f, "utf8")}`;
-  const mm = createMiniMax({ model });
+  // long generations (code, documents) can exceed the 180 s default per attempt
+  const mm = createMiniMax({ model, timeoutMs: Number(process.env.MINIMAX_TIMEOUT_MS) || 180000 });
   const messages = system ? [{ role: "system", content: system }, { role: "user", content: prompt }] : prompt;
   const out = await mm.chat(messages, { maxTokens: Number(process.env.MINIMAX_MAX_TOKENS) || 40000 });
   if (!out.text && out.finish_reason === "length") {
-    process.stderr.write("[minimax] reasoning consumed the whole token budget; raise MINIMAX_MAX_TOKENS or use a -highspeed model\n");
+    process.stderr.write("[minimax] reasoning consumed the whole token budget; raise MINIMAX_MAX_TOKENS or use the Flash model\n");
     process.exitCode = 1;
   }
   process.stdout.write(out.text + "\n");

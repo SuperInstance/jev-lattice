@@ -281,6 +281,24 @@ export class JEVLattice {
     const conflict = satisfied && refuting.size > 0;
     const go = satisfied && !(conflict && spec.block_on_conflict);
     const verdict = conflict ? "CONFLICT" : satisfied ? "GO" : refuting.size ? "REFUTED" : "OPEN";
+    // Margin: how far the DECIDING reading sits from its bar. A verdict whose margin is
+    // within the reader's noise (a measured spread, else fragility_band) is a coin flip on
+    // re-ask even when every sample landed on the same side — so it is flagged fragile.
+    const yesMargin = p => p.confidence - bar(p);
+    const noMargin = p => 1 - bar(p) - p.confidence;
+    const noise = p => Math.max(spec.fragility_band, Number(p.evidence?.spread) || 0);
+    let margin, decider = null;
+    if (satisfied) {
+      const ranked = [...valid].sort((a, b) => yesMargin(b) - yesMargin(a));
+      decider = ranked[required - 1];
+      margin = yesMargin(decider);
+    } else if (refuting.size) {
+      decider = paths.filter(p => noMargin(p) >= 0).sort((a, b) => noMargin(b) - noMargin(a))[0];
+      margin = noMargin(decider);
+    } else {
+      margin = paths.length ? Math.max(...paths.map(p => Math.max(yesMargin(p), noMargin(p)))) : null;
+    }
+    const fragile = decider ? margin < noise(decider) : false;
     const base = {
       ok: true,
       go,
@@ -297,7 +315,9 @@ export class JEVLattice {
       paths: paths.length,
       bestConfidence: paths.reduce((m, p) => Math.max(m, p.confidence), 0),
       proofSources: valid.map(p => p.source_type),
-      multiProofSalience: multiProofSalience(paths)
+      multiProofSalience: multiProofSalience(paths),
+      margin: margin === null ? null : Math.round(margin * 1e4) / 1e4,
+      fragile
     };
     if (conflict) {
       return {
@@ -734,7 +754,13 @@ function normalizeQuestionSpec(spec) {
     // A confident "no" alongside enough "yes" paths blocks GO unless disabled
     block_on_conflict: spec.block_on_conflict !== false,
     // Optional: per-source_type thresholds overriding confidence_threshold
-    source_thresholds: normalizeSourceThresholds(spec.source_thresholds)
+    source_thresholds: normalizeSourceThresholds(spec.source_thresholds),
+    // Optional: evidence files this question depends on (per-file drift + focused state)
+    reads: Array.isArray(spec.reads) && spec.reads.length ? spec.reads.map(String) : null,
+    // Optional: sources that may not count at all (e.g. a sense that never earned trust)
+    blocked_sources: Array.isArray(spec.blocked_sources) && spec.blocked_sources.length ? spec.blocked_sources.map(String) : null,
+    // A decided verdict whose margin is below this (or below the decider's measured spread) is fragile
+    fragility_band: clamp(num(spec.fragility_band, 0.02), 0, 1)
   };
 }
 
@@ -787,6 +813,7 @@ function liveProofs(proofs, spec, now = Date.now()) {
   return (proofs || []).filter(p => {
     if (p.invalidated) return false;
     if (spec.allowed_sources && !spec.allowed_sources.includes(p.source_type)) return false;
+    if (spec.blocked_sources && spec.blocked_sources.includes(p.source_type)) return false;
     if (spec.max_proof_age_ms) {
       const t = Date.parse(p.timestamp);
       if (!Number.isFinite(t) || now - t > spec.max_proof_age_ms) return false;

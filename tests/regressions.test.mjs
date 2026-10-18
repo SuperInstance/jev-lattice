@@ -241,3 +241,25 @@ test("source_thresholds raise the bar for an overconfident source only", () => {
   });
   assert.equal(L.evaluateGoNoGo(n2.id).verdict, "OPEN");
 });
+
+test("margin + fragility: a verdict within the noise band of its bar is flagged", () => {
+  const L = new JEVLattice();
+  const firm = L.ingest({ text: "firm", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.97 } }).node;
+  const thin = L.ingest({ text: "thin", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.91 } }).node;
+  const noisy = L.ingest({ text: "noisy", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.95, evidence: { spread: 0.06 } } }).node;
+  const no = L.ingest({ text: "no", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.09 } }).node;
+  const g = id => L.evaluateGoNoGo(id);
+  assert.deepEqual([g(firm.id).verdict, g(firm.id).margin, g(firm.id).fragile], ["GO", 0.07, false]);
+  assert.deepEqual([g(thin.id).verdict, g(thin.id).fragile], ["GO", true], "0.01 above the bar, inside the 0.02 band");
+  assert.equal(g(noisy.id).fragile, true, "measured spread 0.06 > margin 0.05");
+  assert.deepEqual([g(no.id).verdict, g(no.id).fragile], ["REFUTED", true]);
+});
+
+test("COORDINATED margin is the weakest path still needed", () => {
+  const L = new JEVLattice();
+  const { node } = L.ingest({ text: "Q", question_spec: { evaluation_mode: "COORDINATED", required_independent_proofs: 2, confidence_threshold: 0.9 } });
+  L.addProof(node.id, { source_type: "SENSOR", confidence: 0.99 });
+  L.addProof(node.id, { source_type: "JEV_NOUL", confidence: 0.93 });
+  L.addProof(node.id, { source_type: "DETERMINISTIC_PARSER", confidence: 0.96 });
+  assert.equal(L.evaluateGoNoGo(node.id).margin, 0.06, "2nd-best path (0.96) decides; 0.93 is spare");
+});

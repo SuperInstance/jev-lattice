@@ -1,0 +1,25 @@
+{
+  "at": "2026-10-18T01:46:45.847Z",
+  "TURNS": 12,
+  "REPOS": 6,
+  "out": [
+    {
+      "mode": "whole",
+      "jevCalls": 63,
+      "jevQuestions": 567,
+      "cacheHits": 52,
+      "decidedCorrect": 0.951,
+      "wrongGo": 0,
+      "firstTurnDecidedCorrect": 0.963
+    },
+    {
+      "mode": "perfile",
+      "jevCalls": 53,
+      "jevQuestions": 159,
+      "cacheHits": 274,
+      "decidedCorrect": 1,
+      "wrongGo": 0,
+      "firstTurnDecidedCorrect": 1
+    }
+  ]
+}

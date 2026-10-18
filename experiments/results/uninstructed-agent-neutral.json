@@ -1,0 +1,338 @@
+{
+  "at": "2026-10-18T02:22:43.914Z",
+  "PROMPT": "neutral",
+  "MODEL": "MiniMax-M3.1-Flash-Preview",
+  "report": [
+    {
+      "run": 0,
+      "turns": 8,
+      "used": {
+        "jev_ingest": 5,
+        "jev_predicate_proof": 3,
+        "jev_verify": 4,
+        "jev_edge_proof": 3,
+        "jev_evaluate_go_no_go": 3,
+        "jev_rollup": 2,
+        "jev_decompose": 1,
+        "jev_verify_files": 1
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": null,
+          "truth": "not met",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": null,
+          "truth": "met",
+          "lattice": "GO",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": null,
+          "truth": "unknown",
+          "lattice": null,
+          "matchesLattice": null,
+          "correct": false
+        }
+      ],
+      "deploy": null,
+      "deployTruth": "NO-GO",
+      "error": null
+    },
+    {
+      "run": 1,
+      "turns": 3,
+      "used": {
+        "jev_ingest": 5,
+        "jev_verify_files": 1,
+        "jev_evaluate_go_no_go": 4
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": null,
+          "truth": "not met",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": null,
+          "truth": "met",
+          "lattice": "GO",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": null,
+          "truth": "unknown",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        }
+      ],
+      "deploy": null,
+      "deployTruth": "NO-GO",
+      "error": null
+    },
+    {
+      "run": 2,
+      "turns": 4,
+      "used": {
+        "jev_ingest": 4,
+        "jev_verify_files": 1,
+        "jev_predicate_proof": 3,
+        "jev_evaluate_go_no_go": 3
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": null,
+          "truth": "met",
+          "lattice": "GO",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": null,
+          "truth": "not met",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": null,
+          "truth": "unknown",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        }
+      ],
+      "deploy": null,
+      "deployTruth": "NO-GO",
+      "error": null
+    },
+    {
+      "run": 3,
+      "turns": 7,
+      "used": {
+        "jev_ingest": 4,
+        "jev_predicate_proof": 3,
+        "jev_compile": 3,
+        "jev_edge_proof": 3,
+        "jev_minimax_proof": 1,
+        "jev_invalidate_proof": 1,
+        "jev_evaluate_go_no_go": 3
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": "not met",
+          "truth": "not met",
+          "lattice": "REFUTED",
+          "matchesLattice": true,
+          "correct": true
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": "met",
+          "truth": "met",
+          "lattice": "GO",
+          "matchesLattice": true,
+          "correct": true
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": "not met",
+          "truth": "unknown",
+          "lattice": null,
+          "matchesLattice": null,
+          "correct": false
+        }
+      ],
+      "deploy": "NO-GO",
+      "deployTruth": "NO-GO",
+      "error": null
+    },
+    {
+      "run": 4,
+      "turns": 3,
+      "used": {
+        "jev_ingest": 4,
+        "jev_verify_files": 1,
+        "jev_evaluate_go_no_go": 3
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": null,
+          "truth": "met",
+          "lattice": "GO",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": null,
+          "truth": "not met",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": null,
+          "truth": "unknown",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        }
+      ],
+      "deploy": null,
+      "deployTruth": "NO-GO",
+      "error": null
+    },
+    {
+      "run": 5,
+      "turns": 6,
+      "used": {
+        "jev_ingest": 4,
+        "jev_predicate_proof": 3,
+        "jev_verify_files": 1,
+        "jev_edge_proof": 2,
+        "jev_decompose": 1,
+        "jev_get_node": 1,
+        "jev_verify": 2,
+        "jev_evaluate_go_no_go": 3
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": null,
+          "truth": "not met",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": null,
+          "truth": "met",
+          "lattice": "GO",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": null,
+          "truth": "unknown",
+          "lattice": null,
+          "matchesLattice": null,
+          "correct": false
+        }
+      ],
+      "deploy": null,
+      "deployTruth": "NO-GO",
+      "error": null
+    },
+    {
+      "run": 6,
+      "turns": 3,
+      "used": {
+        "jev_ingest": 4,
+        "jev_verify_files": 1,
+        "jev_evaluate_go_no_go": 3
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": null,
+          "truth": "not met",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": null,
+          "truth": "met",
+          "lattice": "GO",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": null,
+          "truth": "unknown",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        }
+      ],
+      "deploy": null,
+      "deployTruth": "NO-GO",
+      "error": null
+    },
+    {
+      "run": 7,
+      "turns": 5,
+      "used": {
+        "jev_ingest": 2,
+        "jev_predicate_proof": 2,
+        "jev_verify_files": 1,
+        "jev_edge_proof": 1,
+        "jev_minimax_proof": 1,
+        "jev_invalidate_proof": 1,
+        "jev_evaluate_go_no_go": 1
+      },
+      "usedLattice": true,
+      "rows": [
+        {
+          "req": "TLS is enabled (a tls-port is configured)",
+          "claim": null,
+          "truth": "met",
+          "lattice": "REFUTED",
+          "matchesLattice": false,
+          "correct": false
+        },
+        {
+          "req": "password authentication (requirepass) is configured",
+          "claim": null,
+          "truth": "not met",
+          "lattice": null,
+          "matchesLattice": null,
+          "correct": false
+        },
+        {
+          "req": "AOF fsync is set to everysec (appendfsync everysec)",
+          "claim": null,
+          "truth": "unknown",
+          "lattice": null,
+          "matchesLattice": null,
+          "correct": false
+        }
+      ],
+      "deploy": null,
+      "deployTruth": "NO-GO",
+      "error": null
+    }
+  ]
+}

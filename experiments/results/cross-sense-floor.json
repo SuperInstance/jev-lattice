@@ -1,0 +1,397 @@
+{
+  "at": "2026-10-18T02:04:32.618Z",
+  "LATTICE": "xsense-mvd6le7m",
+  "POLICY": {
+    "minSamples": 8,
+    "minGo": 3,
+    "floor": 0.9,
+    "minGoForDiscount": 30
+  },
+  "teacherLabels": 576,
+  "teacherWrong": 0,
+  "learnedRows": [
+    {
+      "sense": "jev-whole",
+      "j": 0,
+      "n": 64,
+      "accTeacher": 0.813,
+      "tTeacher": 0.63,
+      "tTruth": 0.63,
+      "accTruth": 0.813
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 0,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 0,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "compiled",
+      "j": 0,
+      "n": 0,
+      "accTeacher": 0,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0
+    },
+    {
+      "sense": "jev-whole",
+      "j": 1,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 1,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 1,
+      "n": 64,
+      "accTeacher": 0.844,
+      "tTeacher": 0.51,
+      "tTruth": 0.51,
+      "accTruth": 0.844
+    },
+    {
+      "sense": "compiled",
+      "j": 1,
+      "n": 0,
+      "accTeacher": 0,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0
+    },
+    {
+      "sense": "jev-whole",
+      "j": 2,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 2,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 2,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "compiled",
+      "j": 2,
+      "n": 0,
+      "accTeacher": 0,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0
+    },
+    {
+      "sense": "jev-whole",
+      "j": 3,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 3,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 3,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "compiled",
+      "j": 3,
+      "n": 0,
+      "accTeacher": 0,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0
+    },
+    {
+      "sense": "jev-whole",
+      "j": 4,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 4,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 4,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "compiled",
+      "j": 4,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-whole",
+      "j": 5,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.9,
+      "tTruth": 0.9,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 5,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.9,
+      "tTruth": 0.9,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 5,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.9,
+      "tTruth": 0.9,
+      "accTruth": 1
+    },
+    {
+      "sense": "compiled",
+      "j": 5,
+      "n": 0,
+      "accTeacher": 0,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0
+    },
+    {
+      "sense": "jev-whole",
+      "j": 6,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 6,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 6,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "compiled",
+      "j": 6,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-whole",
+      "j": 7,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 7,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 7,
+      "n": 64,
+      "accTeacher": 0.859,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0.859
+    },
+    {
+      "sense": "compiled",
+      "j": 7,
+      "n": 0,
+      "accTeacher": 0,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0
+    },
+    {
+      "sense": "jev-whole",
+      "j": 8,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "jev-paraphrase",
+      "j": 8,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "workers-ai",
+      "j": 8,
+      "n": 64,
+      "accTeacher": 1,
+      "tTeacher": 0.5,
+      "tTruth": 0.5,
+      "accTruth": 1
+    },
+    {
+      "sense": "compiled",
+      "j": 8,
+      "n": 0,
+      "accTeacher": 0,
+      "tTeacher": null,
+      "tTruth": null,
+      "accTruth": 0
+    }
+  ],
+  "score": {
+    "compiled": {
+      "default": {
+        "go": 29,
+        "wrong": 0,
+        "yes": 29
+      },
+      "learned": {
+        "go": 29,
+        "wrong": 0,
+        "yes": 29
+      }
+    },
+    "jev-whole": {
+      "default": {
+        "go": 108,
+        "wrong": 0,
+        "yes": 108
+      },
+      "learned": {
+        "go": 108,
+        "wrong": 0,
+        "yes": 108
+      }
+    },
+    "jev-paraphrase": {
+      "default": {
+        "go": 108,
+        "wrong": 0,
+        "yes": 108
+      },
+      "learned": {
+        "go": 108,
+        "wrong": 0,
+        "yes": 108
+      }
+    },
+    "workers-ai": {
+      "default": {
+        "go": 89,
+        "wrong": 0,
+        "yes": 108
+      },
+      "learned": {
+        "go": 98,
+        "wrong": 0,
+        "yes": 108
+      }
+    }
+  },
+  "verdictScore": {
+    "go": 99,
+    "wrongGo": 0,
+    "refuted": 72,
+    "wrongRefuted": 0,
+    "open": 9,
+    "yes": 108,
+    "n": 180
+  }
+}

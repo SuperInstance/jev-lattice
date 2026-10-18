@@ -81,7 +81,7 @@ export async function verifyOpenGates(lattice, { jev, state, ids = null, limit =
   for (const n of targets) {
     const p = answers[n.id]?.p;
     if (typeof p !== "number") continue;
-    lattice.addProof(n.id, noulToProof({ p, model: answers[n.id].model || answers._model, latency_ms: answers._latency_ms, cached: answers[n.id].cached }, {
+    lattice.addProof(n.id, noulToProof({ p, model: answers[n.id].model || answers._model, latency_ms: answers._latency_ms, cached: answers[n.id].cached, spread: answers[n.id].spread }, {
       note: `jev fan-out (${targets.length} in one call)`,
       instructions: questionText(n),
       state_hash: h,
@@ -262,4 +262,70 @@ export async function compile(lattice, nodeId, {
     step("rollup", { applied: ru.applied, note: ru.note });
   }
   return { ok: true, trace, gate: gate() };
+}
+
+/**
+ * Per-file evidence (T28). `files` = { path: content }. Each open question is
+ * verified against only the files in its `question_spec.reads` (all files when
+ * unset); questions with the same read-set share ONE Jev call. Proofs record a
+ * hash per file read, so `invalidateChangedFiles` retires exactly the proofs
+ * whose inputs changed — not everything that shared a state blob.
+ */
+export async function verifyFiles(lattice, { jev, files, ids = null, rules = null, limit = 256 } = {}) {
+  const paths = Object.keys(files).sort();
+  const hashes = Object.fromEntries(await Promise.all(paths.map(async p => [p, await stateHash(files[p])])));
+  const open = lattice
+    .listNodes()
+    .filter(n => n.node_type === "QUESTION" && (!ids || ids.includes(n.id)))
+    .filter(n => lattice.evaluateGoNoGo(n.id).open)
+    .slice(0, limit);
+  const groups = new Map();
+  for (const n of open) {
+    const reads = (n.question_spec?.reads || paths).filter(p => p in files).sort();
+    const k = reads.join("\n");
+    if (!groups.has(k)) groups.set(k, { reads, nodes: [] });
+    groups.get(k).nodes.push(n);
+  }
+  const results = [];
+  let calls = 0, cacheHits = 0;
+  await Promise.all([...groups.values()].map(async g => {
+    const state = { files: Object.fromEntries(g.reads.map(p => [p, files[p]])) };
+    if (rules) state.reading_rules = rules;
+    const ans = await jev.nouls(state, g.nodes.map(n => ({ key: n.id, instructions: questionText(n) })));
+    calls++;
+    cacheHits += ans._cache?.hits || 0;
+    const fileHashes = Object.fromEntries(g.reads.map(p => [p, hashes[p]]));
+    for (const n of g.nodes) {
+      const p = ans[n.id]?.p;
+      if (typeof p !== "number") continue;
+      const proof = noulToProof({ p, model: ans[n.id].model || ans._model, latency_ms: ans._latency_ms, cached: ans[n.id].cached, spread: ans[n.id].spread }, {
+        note: `jev per-file (${g.reads.length} file(s))`, instructions: questionText(n)
+      });
+      proof.evidence = { ...(proof.evidence || {}), file_hashes: fileHashes };
+      lattice.addProof(n.id, proof);
+      const gate = lattice.evaluateGoNoGo(n.id);
+      results.push({ id: n.id, text: n.text, p, verdict: gate.verdict, reads: g.reads });
+    }
+  }));
+  return { ok: true, verified: results.length, calls, cacheHits, groups: groups.size, results };
+}
+
+/** Retire proofs whose recorded file hashes no longer match `files` (removed file = changed). */
+export async function invalidateChangedFiles(lattice, { files, reason = "file changed" } = {}) {
+  const current = {};
+  for (const p of Object.keys(files)) current[p] = await stateHash(files[p]);
+  let invalidated = 0, kept = 0;
+  const changedFiles = new Set();
+  for (const n of lattice.listNodes()) {
+    for (const pr of n.active_proofs || []) {
+      const fh = pr.evidence?.file_hashes;
+      if (pr.invalidated || !fh) continue;
+      const changed = Object.entries(fh).filter(([path, h]) => current[path] !== h).map(([path]) => path);
+      if (!changed.length) { kept++; continue; }
+      changed.forEach(c => changedFiles.add(c));
+      lattice.invalidateProof(n.id, pr.proof_id, `${reason}: ${changed.join(", ")}`);
+      invalidated++;
+    }
+  }
+  return { ok: true, invalidated, kept, changedFiles: [...changedFiles] };
 }

@@ -1,0 +1,110 @@
+{
+  "at": "2026-10-18T02:07:00.195Z",
+  "N": 30,
+  "results": [
+    {
+      "name": "regex",
+      "n": 245,
+      "correct": 173,
+      "wrongGo": 0,
+      "wrongRef": 72,
+      "open": 0,
+      "jevQ": 0
+    },
+    {
+      "name": "jev",
+      "n": 245,
+      "correct": 192,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 53,
+      "jevQ": 245
+    },
+    {
+      "name": "refute-only (regex NO final)",
+      "n": 245,
+      "correct": 173,
+      "wrongGo": 0,
+      "wrongRef": 72,
+      "open": 0,
+      "jevQ": 96
+    },
+    {
+      "name": "confirm-only (regex YES final)",
+      "n": 245,
+      "correct": 192,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 53,
+      "jevQ": 149
+    },
+    {
+      "name": "jev choice (P(not none))",
+      "n": 245,
+      "correct": 238,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 7,
+      "jevQ": 245
+    },
+    {
+      "name": "confirm-only + choice",
+      "n": 245,
+      "correct": 238,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 7,
+      "jevQ": 149
+    },
+    {
+      "name": "jev choice (max line)",
+      "n": 245,
+      "correct": 238,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 7,
+      "jevQ": 245
+    },
+    {
+      "name": "lattice: choice-sum + noul veto",
+      "n": 245,
+      "correct": 241,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 4,
+      "jevQ": 245
+    },
+    {
+      "name": "lattice: max-line + noul veto",
+      "n": 245,
+      "correct": 241,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 4,
+      "jevQ": 245
+    },
+    {
+      "name": "confirm-only + max-line + veto",
+      "n": 245,
+      "correct": 241,
+      "wrongGo": 0,
+      "wrongRef": 0,
+      "open": 4,
+      "jevQ": 149
+    }
+  ],
+  "learned": {
+    "regexSaysYes": {
+      "n": 96,
+      "precision": 1
+    },
+    "regexSaysNo": {
+      "n": 96,
+      "precision": 0.75
+    }
+  },
+  "truth": {
+    "yes": 1,
+    "no": 0.517
+  }
+}

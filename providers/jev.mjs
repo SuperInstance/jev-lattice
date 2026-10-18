@@ -25,7 +25,9 @@ export function createJev({
   baseUrl = DEFAULT_BASE,
   fetchImpl = globalThis.fetch,
   maxRetries = 4,
-  timeoutMs = 60000
+  timeoutMs = 60000,
+  // 262k per-request/per-question context instead of 64k/32k (TypeSafe long-context header)
+  longContext = false
 } = {}) {
   if (!apiKey) throw new Error("Jev: missing api key (TYPESAFE_AI_TOKEN)");
   const usage = { calls: 0, input_tokens: 0, output_tokens: 0, questions: 0 };
@@ -44,7 +46,11 @@ export function createJev({
       try {
         res = await fetchImpl(`${baseUrl}/systemone`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            ...(longContext ? { "TypeSafe-Danger-Zone-Long-Context": "true" } : {})
+          },
           body,
           signal: ctrl.signal
         });
@@ -117,12 +123,12 @@ export function createJev({
     return res.json();
   }
 
-  return { ask, noul, nouls, choice, score, models, usage, model, provider: "typesafe" };
+  return { ask, noul, nouls, choice, score, models, usage, model, longContext, provider: "typesafe" };
 }
 
 /** Convert a Noul result into a lattice proof. */
 export function noulToProof(
-  { p, model, latency_ms, cached },
+  { p, model, latency_ms, cached, spread },
   { note = null, instructions = null, state_hash = null, channel = null } = {}
 ) {
   const evidence = {};
@@ -131,6 +137,8 @@ export function noulToProof(
   if (state_hash) evidence.state_hash = state_hash;
   if (channel) evidence.channel = channel;
   if (cached) evidence.cached = true;
+  // measured re-ask spread (stability probe) — lets the gate flag fragile verdicts
+  if (typeof spread === "number") evidence.spread = spread;
   return {
     source_type: "JEV_NOUL",
     provider: "typesafe",
