@@ -104,3 +104,23 @@ test("MCP stdio: malformed line yields a parse error, server keeps serving", asy
   assert.ok((await s.rpc("ping")).result);
   await s.stop();
 });
+
+test("tool arguments are validated against inputSchema before dispatch", async () => {
+  const { createMcp, validateArgs } = await import("../mcp-core.mjs");
+  const { JEVLattice } = await import("../jev-core.js");
+  const m = createMcp({ lattice: new JEVLattice() });
+  const callTool = (name, args) => m.handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
+  for (const [name, args, needle] of [
+    ["jev_ingest", { text: 42 }, "arguments.text: expected string"],
+    ["jev_ingest", { text: "x", question_spec: "nope" }, "arguments.question_spec: expected object"],
+    ["jev_ingest", { text: "x", question_spec: { evaluation_mode: "MAYBE" } }, "must be one of BINARY, COORDINATED"],
+    ["jev_add_proof", { id: "x", proof: { source_type: "S", confidence: 2 } }, "must be ≤ 1"],
+    ["jev_add_proof", { id: "x" }, "arguments.proof: required"]
+  ]) {
+    const r = await callTool(name, args);
+    assert.equal(r.result.isError, true, JSON.stringify(args));
+    assert.match(r.result.structuredContent.error, new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.equal((await callTool("jev_ingest", { text: "fine", question_spec: { confidence_threshold: 0.9 } })).result.isError, false);
+  assert.equal(validateArgs({ type: ["string", "object"] }, { a: 1 }), null, "union types");
+});

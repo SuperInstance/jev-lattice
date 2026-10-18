@@ -120,6 +120,16 @@ process.exit(gates.every(g => g.go) ? 0 : 1);
 ```
 Persist `lattice.exportState()` between runs (as an artifact or a cache) to keep the history of proofs, then `importState` it at the start of the next run.
 
+### Gate CI with one config file (CLI + GitHub Action)
+```bash
+npx -p jev-lattice jev gate --config jev.gates.json    # exit 0 = all GO, 1 = not all GO (fails closed), 2 = config error
+```
+```yaml
+- uses: SuperInstance/jev-lattice@v0.6
+  with: { config: jev.gates.json, typesafe-token: "${{ secrets.TYPESAFE_AI_TOKEN }}" }
+```
+Proofs for unchanged files are reused between runs, so a run with no changes makes no API calls. Guide: [docs/guides/ci-gates.md](docs/guides/ci-gates.md).
+
 ### Give an agent the lattice (MCP over stdio)
 Add this to your MCP client config (Claude Code, Cursor, or any MCP host):
 ```json
@@ -191,6 +201,7 @@ The Durable Object hashes the state, retires proofs built on older content, and 
 | `npm test` | gate, regressions, orchestrator, proof cache, compiled predicates, calibration, senses, MCP stdio end-to-end, README examples | nothing |
 | `npm run test:browser` | browser UI end-to-end (Playwright) | Chromium |
 | `node scripts/smoke-worker.mjs <url> <key> [--live]` | a deployed Worker, end to end | deployed Worker |
+| `npm pack --dry-run` | what the npm package ships (product files only) | nothing |
 | `npm run live:*` | experiments with real providers ([docs/guides/researchers.md](docs/guides/researchers.md)) | tokens |
 
 CI (`.github/workflows/ci.yml`) runs the tests on Node 20 and 22, the browser end-to-end test, and a Worker bundle check.
@@ -217,7 +228,8 @@ CI (`.github/workflows/ci.yml`) runs the tests on Node 20 and 22, the browser en
 
 | You are… | Start here |
 |---|---|
-| **An engineer adding gates to a pipeline** | this README → [docs/GATE-SEMANTICS.md](docs/GATE-SEMANTICS.md) |
+| **An engineer adding gates to a pipeline** | [docs/guides/ci-gates.md](docs/guides/ci-gates.md) → [docs/GATE-SEMANTICS.md](docs/GATE-SEMANTICS.md) |
+| **Deciding how to deploy or package it** | [docs/PRODUCTION.md](docs/PRODUCTION.md) |
 | **Building agents or MCP integrations** | [docs/guides/agent-integrators.md](docs/guides/agent-integrators.md) · [docs/MCP.md](docs/MCP.md) |
 | **A JS developer embedding the library** | [docs/guides/library-api.md](docs/guides/library-api.md) |
 | **A platform engineer running the Cloudflare deployment** | [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md) |
@@ -247,6 +259,8 @@ Selected results. Every number has a script in `experiments/` and raw output in 
 ## Layout
 ```
 jev-core.js            gate + lattice (no dependencies; browser, Node, Workers)
+gate.mjs               config-driven gating (jev gate / GitHub Action)
+bin/jev.mjs            CLI: gate · check-config · mcp · version
 orchestrator.mjs       verifiers → proofs: verify, fan-out, per-file, decompose, roll-up, compile, drift
 proof-cache.mjs        content-addressed answers (memory / Durable Object storage) + stability probe
 compiled.mjs           model-written predicates: compile, validate, schedule, quarantine, heal

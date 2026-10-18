@@ -1,7 +1,7 @@
 {
   "name": "jev-lattice",
-  "version": "0.5.0",
-  "description": "Question graph with multi-proof verification and deterministic go/no-go — TypeSafe Jev + MiniMax proof providers, MCP server, Cloudflare Durable Object deployment",
+  "version": "0.6.0",
+  "description": "Deterministic go/no-go gates over calibrated evidence: TypeSafe Jev verification, proof cache, per-file drift, MCP server, CLI + GitHub Action, Cloudflare Durable Object deployment",
   "type": "module",
   "main": "jev-core.js",
   "exports": {
@@ -14,9 +14,11 @@
     "./mcp": "./mcp-core.mjs",
     "./providers/jev": "./providers/jev.mjs",
     "./providers/minimax": "./providers/minimax.mjs",
-    "./providers/workers-ai": "./providers/workers-ai.mjs"
+    "./providers/workers-ai": "./providers/workers-ai.mjs",
+    "./gate": "./gate.mjs"
   },
   "bin": {
+    "jev": "./bin/jev.mjs",
     "jev-mcp": "./mcp-server.mjs"
   },
   "scripts": {
@@ -42,7 +44,9 @@
     "build:assets": "node scripts/build-assets.mjs",
     "dev": "npm run build:assets && wrangler dev",
     "deploy": "npm run build:assets && wrangler deploy",
-    "smoke": "node scripts/smoke-worker.mjs"
+    "smoke": "node scripts/smoke-worker.mjs",
+    "prepublishOnly": "npm test",
+    "gate": "node bin/jev.mjs gate"
   },
   "devDependencies": {
     "wrangler": "^4.151.1"
@@ -63,5 +67,49 @@
   "license": "MIT",
   "engines": {
     "node": ">=20"
+  },
+  "files": [
+    "jev-core.js",
+    "orchestrator.mjs",
+    "proof-cache.mjs",
+    "compiled.mjs",
+    "senses.mjs",
+    "calibration.mjs",
+    "mcp-core.mjs",
+    "mcp-server.mjs",
+    "harness.mjs",
+    "gate.mjs",
+    "bin/",
+    "providers/",
+    "worker/index.mjs",
+    "worker/predicates.mjs",
+    "browser/",
+    "wrangler.jsonc",
+    "scripts/build-assets.mjs",
+    "scripts/smoke-worker.mjs",
+    "examples/",
+    "action.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE",
+    "docs/GATE-SEMANTICS.md",
+    "docs/guides/",
+    "docs/MCP.md",
+    "docs/CLOUDFLARE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/PRODUCTION.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SuperInstance/jev-lattice.git"
+  },
+  "homepage": "https://github.com/SuperInstance/jev-lattice#readme",
+  "bugs": {
+    "url": "https://github.com/SuperInstance/jev-lattice/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
   }
 }

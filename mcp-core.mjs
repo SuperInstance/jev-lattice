@@ -7,7 +7,7 @@
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.5.0" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.6.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -49,6 +49,42 @@ const STATE_ARG = {
   description: "System One state: text or JSON the verifier reads (config, log, diff…). Defaults to the lattice neighborhood.",
   type: ["string", "object", "array"]
 };
+
+/**
+ * Minimal JSON-Schema check for tool arguments (the subset our inputSchemas use:
+ * type / required / properties / items / enum / minimum / maximum /
+ * additionalProperties-as-schema). Returns null or "path: problem".
+ */
+export function validateArgs(schema, value, path = "arguments") {
+  if (!schema || typeof schema !== "object") return null;
+  const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : null;
+  const typeOf = v => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
+  if (types) {
+    const t = typeOf(value);
+    const ok = types.some(x => x === t || (x === "integer" && t === "number" && Number.isInteger(value)) || (x === "number" && t === "number" && Number.isFinite(value)));
+    if (!ok) return `${path}: expected ${types.join(" | ")}, got ${t}`;
+  }
+  if (schema.enum && !schema.enum.includes(value)) return `${path}: must be one of ${schema.enum.join(", ")}`;
+  if (typeof value === "number") {
+    if (schema.minimum !== undefined && value < schema.minimum) return `${path}: must be ≥ ${schema.minimum}`;
+    if (schema.maximum !== undefined && value > schema.maximum) return `${path}: must be ≤ ${schema.maximum}`;
+  }
+  if (typeOf(value) === "object") {
+    for (const k of schema.required || []) if (value[k] === undefined) return `${path}.${k}: required`;
+    for (const [k, v] of Object.entries(value)) {
+      const sub = schema.properties?.[k] ?? (typeof schema.additionalProperties === "object" ? schema.additionalProperties : null);
+      const err = sub && validateArgs(sub, v, `${path}.${k}`);
+      if (err) return err;
+    }
+  }
+  if (typeOf(value) === "array" && schema.items) {
+    for (let i = 0; i < value.length; i++) {
+      const err = validateArgs(schema.items, value[i], `${path}[${i}]`);
+      if (err) return err;
+    }
+  }
+  return null;
+}
 
 const MUTATING = new Set([
   "jev_ingest", "jev_add_proof", "jev_invalidate_proof", "jev_consolidate", "jev_import_state",
@@ -229,8 +265,14 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
       case "tools/call": {
         const name = msg.params?.name;
         if (!names.has(name)) return fail(msg.id, -32602, `Unknown tool: ${name}`);
+        const args = msg.params?.arguments ?? {};
+        const invalid = validateArgs(defs.find(d => d.name === name).inputSchema, args);
+        if (invalid) {
+          const result = { ok: false, error: `invalid arguments — ${invalid}` };
+          return ok(msg.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result, isError: true });
+        }
         try {
-          const result = await callTool(name, msg.params?.arguments || {});
+          const result = await callTool(name, args);
           if (MUTATING.has(name) && persist && result?.ok !== false) await persist();
           return ok(msg.id, {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],

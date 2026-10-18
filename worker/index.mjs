@@ -208,6 +208,9 @@ export default {
 
     if (parts[0] === "mcp" || parts[0] === "api") {
       if (!authorized(req, env)) return json({ ok: false, error: "unauthorized" }, 401, { "www-authenticate": "Bearer" });
+      // bound request size before parsing (states and file maps can be large, but not unbounded)
+      const max = Number(env.JEV_MAX_BODY_BYTES) || 4 * 1024 * 1024;
+      if (Number(req.headers.get("content-length") || 0) > max) return json({ ok: false, error: `request body exceeds ${max} bytes` }, 413);
       const name = parts[0] === "mcp" ? parts[1] || "default" : parts[1];
       if (!name || !NAME_RE.test(name)) return json({ ok: false, error: "bad lattice name" }, 400);
       const stub = env.LATTICE.get(env.LATTICE.idFromName(name));

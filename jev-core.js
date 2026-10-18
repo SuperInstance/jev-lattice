@@ -299,6 +299,23 @@ export class JEVLattice {
       margin = paths.length ? Math.max(...paths.map(p => Math.max(yesMargin(p), noMargin(p)))) : null;
     }
     const fragile = decider ? margin < noise(decider) : false;
+    // require_firm: a fragile verdict stands only with corroboration (a spare supporting
+    // path for GO, a second refuting path for REFUTED); otherwise the gate stays OPEN.
+    let needsCorroboration = false;
+    if (spec.require_firm && fragile && verdict !== "CONFLICT") {
+      const corroborated = satisfied ? valid.length > required : refuting.size > 1;
+      if (!corroborated) needsCorroboration = true;
+    }
+    if (needsCorroboration) {
+      return {
+        ok: true, go: false, gated: true, open: true, verdict: "OPEN", needs_corroboration: true,
+        held: verdict, mode, required, threshold, validProofs: valid.length, refutingProofs: refuting.size,
+        paths: paths.length, liveProofs: live.length, ignoredProofs: (n.active_proofs || []).length - live.length,
+        bestConfidence: paths.reduce((m, p) => Math.max(m, p.confidence), 0), proofSources: valid.map(p => p.source_type),
+        multiProofSalience: multiProofSalience(paths), margin: Math.round(margin * 1e4) / 1e4, fragile: true,
+        reason: `${verdict} is fragile (margin ${margin.toFixed(3)} < noise ${noise(decider).toFixed(3)}); needs a corroborating independent path`
+      };
+    }
     const base = {
       ok: true,
       go,
@@ -425,7 +442,10 @@ export class JEVLattice {
   consolidate({
     pruneFloor = 0.08,
     mergeDistance = 0.18,
-    stitchRadius = 0.45
+    stitchRadius = 0.45,
+    // stitch each node to at most this many nearest neighbours within stitchRadius.
+    // Without a cap, edges grow quadratically in dense regions (v0.5: 3.6 s at 500 nodes).
+    maxDegree = 16
   } = {}) {
     const before = this.nodes.size;
     let pruned = 0;
@@ -434,53 +454,75 @@ export class JEVLattice {
     let seeking = 0;
 
     const list = this.listNodes();
-
-    // 1. Edge stitching
-    for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const a = list[i], b = list[j];
-        const d = dist(a.spatial_coordinate, b.spatial_coordinate);
-        if (d < stitchRadius) {
-          const shared = a.tags.filter(t => b.tags.includes(t));
-          const base = clamp(0.55 - d, 0.05, 0.7);
-          const boost = shared.length ? 0.12 : 0;
-          if (this._addEdge(a.id, b.id, base + boost, shared)) edgesAdded++;
-          if (this._addEdge(b.id, a.id, (base + boost) * 0.7, shared)) edgesAdded++;
+    const index = new Map(list.map((n, i) => [n.id, i]));
+    // Spatial grid: neighbours of a node live in its own or the 8 adjacent cells.
+    const cell = Math.max(stitchRadius, mergeDistance, 1e-6);
+    const key = c => `${Math.floor(c[0] / cell)},${Math.floor(c[1] / cell)}`;
+    const grid = new Map();
+    for (const n of list) {
+      const k = key(n.spatial_coordinate);
+      if (!grid.has(k)) grid.set(k, []);
+      grid.get(k).push(n);
+    }
+    const near = (n, radius) => {
+      const [cx, cy] = [Math.floor(n.spatial_coordinate[0] / cell), Math.floor(n.spatial_coordinate[1] / cell)];
+      const out = [];
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+        for (const m of grid.get(`${cx + dx},${cy + dy}`) || []) {
+          if (m === n) continue;
+          const d = dist(n.spatial_coordinate, m.spatial_coordinate);
+          if (d < radius) out.push({ m, d });
         }
+      }
+      return out.sort((a, b) => a.d - b.d || index.get(a.m.id) - index.get(b.m.id));
+    };
+
+    // 1. Edge stitching (nearest maxDegree neighbours within stitchRadius), neighbour lists computed once
+    const nbrs = new Map(list.map(n => [n.id, near(n, stitchRadius).slice(0, maxDegree)]));
+    const nbrSets = new Map([...nbrs].map(([id, l]) => [id, new Set(l.map(x => x.m.id))]));
+    for (const a of list) {
+      for (const { m: b, d } of nbrs.get(a.id)) {
+        if (index.get(b.id) < index.get(a.id) && nbrSets.get(b.id).has(a.id)) continue; // pair already handled from b's side
+        const shared = a.tags.filter(t => b.tags.includes(t));
+        const base = clamp(0.55 - d, 0.05, 0.7);
+        const boost = shared.length ? 0.12 : 0;
+        if (this._addEdge(a.id, b.id, base + boost, shared)) edgesAdded++;
+        if (this._addEdge(b.id, a.id, (base + boost) * 0.7, shared)) edgesAdded++;
       }
     }
 
-    // 2. Soft merge of extremely close OBSERVATION nodes (do not merge gated questions)
-    const removed = new Set();
-    for (let i = 0; i < list.length; i++) {
-      if (removed.has(list[i].id)) continue;
-      if (list[i].node_type === "QUESTION") continue;
-      for (let j = i + 1; j < list.length; j++) {
-        if (removed.has(list[j].id)) continue;
-        if (list[j].node_type === "QUESTION") continue;
-        const a = list[i], b = list[j];
-        if (dist(a.spatial_coordinate, b.spatial_coordinate) < mergeDistance) {
-          const keep = a.salience_score >= b.salience_score ? a : b;
-          const drop = keep === a ? b : a;
-          keep.text = (keep.text + " · " + drop.text).slice(0, 2000);
-          keep.tags = Array.from(new Set([...keep.tags, ...drop.tags]));
-          keep.salience_score = clamp(keep.salience_score + 0.05, 0, 1);
-          keep.epistemic_uncertainty = Math.min(keep.epistemic_uncertainty, drop.epistemic_uncertainty);
-          keep.access_frequency = (keep.access_frequency || 0) + (drop.access_frequency || 0);
-          keep.transition_probabilities = [
-            ...(keep.transition_probabilities || []),
-            ...(drop.transition_probabilities || [])
-          ];
-          for (const n of this.nodes.values()) {
-            n.transition_probabilities = (n.transition_probabilities || [])
-              .map(e => (e.target_node_id === drop.id ? { ...e, target_node_id: keep.id } : e))
-              .filter(e => e.target_node_id !== n.id)
-              .filter((e, idx, arr) => arr.findIndex(x => x.target_node_id === e.target_node_id) === idx);
-          }
-          this.nodes.delete(drop.id);
-          removed.add(drop.id);
-          merged++;
+    // 2. Soft merge of extremely close OBSERVATION nodes (gated questions are never merged).
+    //    Merges are decided in list order; edge remapping is done once at the end.
+    const alias = new Map(); // dropped id → surviving id
+    const resolve = id => { while (alias.has(id)) id = alias.get(id); return id; };
+    for (const a of list) {
+      if (alias.has(a.id) || a.node_type === "QUESTION") continue;
+      for (const { m: b } of near(a, mergeDistance)) {
+        if (index.get(b.id) <= index.get(a.id) || alias.has(b.id) || b.node_type === "QUESTION") continue;
+        if (alias.has(a.id)) break; // a was absorbed by an earlier merge in this loop
+        const keep = a.salience_score >= b.salience_score ? a : b;
+        const drop = keep === a ? b : a;
+        keep.text = (keep.text + " · " + drop.text).slice(0, 2000);
+        keep.tags = Array.from(new Set([...keep.tags, ...drop.tags]));
+        keep.salience_score = clamp(keep.salience_score + 0.05, 0, 1);
+        keep.epistemic_uncertainty = Math.min(keep.epistemic_uncertainty, drop.epistemic_uncertainty);
+        keep.access_frequency = (keep.access_frequency || 0) + (drop.access_frequency || 0);
+        keep.transition_probabilities = [...(keep.transition_probabilities || []), ...(drop.transition_probabilities || [])];
+        drop.transition_probabilities = [];
+        alias.set(drop.id, keep.id);
+        this.nodes.delete(drop.id);
+        merged++;
+      }
+    }
+    if (alias.size) {
+      for (const n of this.nodes.values()) {
+        const seen = new Map();
+        for (const e of n.transition_probabilities || []) {
+          const target = resolve(e.target_node_id);
+          if (target === n.id || !this.nodes.has(target) || seen.has(target)) continue;
+          seen.set(target, target === e.target_node_id ? e : { ...e, target_node_id: target });
         }
+        n.transition_probabilities = [...seen.values()];
       }
     }
 
@@ -760,7 +802,9 @@ function normalizeQuestionSpec(spec) {
     // Optional: sources that may not count at all (e.g. a sense that never earned trust)
     blocked_sources: Array.isArray(spec.blocked_sources) && spec.blocked_sources.length ? spec.blocked_sources.map(String) : null,
     // A decided verdict whose margin is below this (or below the decider's measured spread) is fragile
-    fragility_band: clamp(num(spec.fragility_band, 0.02), 0, 1)
+    fragility_band: clamp(num(spec.fragility_band, 0.02), 0, 1),
+    // Optional: fragile verdicts need corroboration by an extra independent path
+    require_firm: spec.require_firm === true
   };
 }
 

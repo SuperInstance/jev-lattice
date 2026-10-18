@@ -1,0 +1,67 @@
+name: JEV gates
+description: Deterministic go/no-go gates over your repo's files, verified by TypeSafe Jev. Proofs on unchanged files are reused across runs.
+branding:
+  icon: check-circle
+  color: green
+inputs:
+  config:
+    description: Path to the gates config (see docs/guides/ci-gates.md)
+    default: jev.gates.json
+  root:
+    description: Directory the config's `reads` paths are relative to
+    default: "."
+  state-path:
+    description: Where the lattice state is kept between runs (restored/saved via actions/cache)
+    default: .jev/state.json
+  format:
+    description: text | json | markdown (a markdown summary is always written to the job summary)
+    default: text
+  offline:
+    description: "true = evaluate existing proofs only, no verifier calls"
+    default: "false"
+  typesafe-token:
+    description: TypeSafe API key (pass a secret). Not needed when offline is true.
+    default: ""
+outputs:
+  pass:
+    description: "true when every gate is GO"
+    value: ${{ steps.gate.outputs.pass }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+    - name: Restore lattice state
+      uses: actions/cache/restore@v4
+      with:
+        path: ${{ inputs.state-path }}
+        key: jev-state-${{ github.ref_name }}-${{ github.run_id }}
+        restore-keys: |
+          jev-state-${{ github.ref_name }}-
+          jev-state-
+    - name: Evaluate gates
+      id: gate
+      shell: bash
+      env:
+        TYPESAFE_AI_TOKEN: ${{ inputs.typesafe-token }}
+      run: |
+        set +e
+        args=(gate --config "${{ inputs.config }}" --root "${{ inputs.root }}" --state "${{ inputs.state-path }}" --format "${{ inputs.format }}")
+        if [ "${{ inputs.offline }}" = "true" ]; then args+=(--offline); fi
+        node "${{ github.action_path }}/bin/jev.mjs" "${args[@]}"
+        code=$?
+        echo "pass=$([ $code -eq 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+        echo "code=$code" >> "$GITHUB_OUTPUT"
+    - name: Save lattice state
+      if: always()
+      uses: actions/cache/save@v4
+      with:
+        path: ${{ inputs.state-path }}
+        key: jev-state-${{ github.ref_name }}-${{ github.run_id }}
+    - name: Fail when gates are not GO
+      if: steps.gate.outputs.code != '0'
+      shell: bash
+      run: |
+        echo "::error::JEV gates are not all GO (exit ${{ steps.gate.outputs.code }}); see the job summary"
+        exit 1

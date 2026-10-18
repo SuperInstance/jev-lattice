@@ -3,7 +3,8 @@
 ## By role
 | Role | Read |
 |---|---|
-| Engineer adding gates to a pipeline | [../README.md](../README.md) → [GATE-SEMANTICS.md](GATE-SEMANTICS.md) |
+| Engineer adding gates to a pipeline | [guides/ci-gates.md](guides/ci-gates.md) → [GATE-SEMANTICS.md](GATE-SEMANTICS.md) |
+| Deciding deployment / packaging | [PRODUCTION.md](PRODUCTION.md) |
 | Agent / MCP integrator | [guides/agent-integrators.md](guides/agent-integrators.md) → [MCP.md](MCP.md) |
 | JS developer embedding the library | [guides/library-api.md](guides/library-api.md) |
 | Platform engineer (Cloudflare) | [CLOUDFLARE.md](CLOUDFLARE.md) |
@@ -18,10 +19,12 @@
 | [ARCHITECTURE.md](ARCHITECTURE.md) | explanation | layers, data flow, progressive compilation, capacity tiers |
 | [MCP.md](MCP.md) | reference | stdio server, environment, all tools |
 | [CLOUDFLARE.md](CLOUDFLARE.md) | how-to + reference | Worker routes, Durable Object storage layout, bindings, deploy, operations |
+| [PRODUCTION.md](PRODUCTION.md) | assessment + plan | what is production / beta / research, deployment tiers, packaging, prioritised remaining work, cost and failure modes |
+| [guides/ci-gates.md](guides/ci-gates.md) | how-to | `jev gate` config, CLI, GitHub Action, reading the output |
 | [guides/agent-integrators.md](guides/agent-integrators.md) | how-to | transports, the minimal decision loop, prompting agents, pitfalls |
 | [guides/library-api.md](guides/library-api.md) | reference | every exported function by module |
 | [guides/researchers.md](guides/researchers.md) | how-to | running and adding experiments, generators, delegating to MiniMax |
-| [TILES.md](TILES.md) | catalogue | T1–T35: reusable patterns, each with evidence |
+| [TILES.md](TILES.md) | catalogue | T1–T40: reusable patterns, each with evidence |
 | [RESEARCH-LOG.md](RESEARCH-LOG.md) | record | every experiment's numbers and interpretation |
-| [JOURNAL.md](JOURNAL.md) | record | how the tools were built: decisions, alternatives, mistakes, process lessons P1–P20 |
+| [JOURNAL.md](JOURNAL.md) | record | how the tools were built: decisions, alternatives, mistakes, process lessons P1–P22 |
 | [journal/](journal/) | artefacts | prompts sent to MiniMax and its raw outputs, kept for review |

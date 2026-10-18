@@ -22,6 +22,7 @@ A **question node** has `node_type: "QUESTION"`, a `question_spec`, and `active_
 | `block_on_conflict` | boolean | true | Only an explicit `false` disables it. |
 | `reads` | string[] \| null | null | Informational for the gate; used by verifiers. |
 | `fragility_band` | number in [0, 1] | 0.02 | |
+| `require_firm` | boolean | false | Only an explicit `true` enables it (§2, step 10). |
 
 A QUESTION with no `question_spec` MUST get the normalised defaults: a BINARY gate. It MUST NOT evaluate to GO without proofs.
 
@@ -56,6 +57,7 @@ Given a node *n*, its spec *s*, and an evaluation time `now` (default: the curre
    - Else (OPEN): `margin = max over paths of max(confidence − bar, (1 − bar) − confidence)`. This is ≤ 0 and measures how far the gate is from any decision; it is `null` when there are no paths.
    - Round to 4 decimals.
 9. **Fragile.** `fragile = decider exists ∧ margin < max(s.fragility_band, decider.evidence.spread ?? 0)`. OPEN gates are never fragile.
+10. **Require firm (opt-in).** If `s.require_firm ∧ fragile ∧ verdict ≠ CONFLICT`, the verdict needs corroboration. A GO needs `|supporting| > required`; a REFUTED needs more than one refuting path. Without corroboration, return `verdict: "OPEN"`, `go: false`, `needs_corroboration: true`, and `held` = the verdict that would otherwise have been returned. *Measured caveat:* this lowered reproducibility in practice (tile T38), so it is off by default.
 
 ### 2.1 Output fields
 These MUST be present: `ok`, `go`, `gated`, `open`, `verdict`, `mode`, `required`, `threshold`, `validProofs` (|supporting|), `refutingProofs`, `paths`, `liveProofs`, `ignoredProofs`, `bestConfidence` (the maximum path reading), `proofSources`, `multiProofSalience` (1 − Π(1 − cᵢ) over paths), `margin`, `fragile` and `reason` (free text). The text of `reason` is **not** normative.
