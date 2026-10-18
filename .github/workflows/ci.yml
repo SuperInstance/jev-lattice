@@ -26,7 +26,8 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run example
-      - name: Worker bundles
+      - name: Worker bundles (wrangler 4 needs Node >= 22)
+        if: matrix.node >= 22
         run: npm run build:assets && npx wrangler deploy --dry-run --outdir dist
 
   browser:
