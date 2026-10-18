@@ -1,6 +1,6 @@
 {
   "name": "jev-lattice",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Deterministic go/no-go gates over calibrated evidence: TypeSafe Jev verification, proof cache, per-file drift, MCP server, CLI + GitHub Action, Cloudflare Durable Object deployment",
   "type": "module",
   "main": "jev-core.js",
@@ -85,7 +85,9 @@
     "live:typesafe-hard": "node experiments/typesafe-hard.mjs",
     "live:typesafe-levers": "node experiments/typesafe-levers.mjs",
     "live:typesafe-redteam": "node experiments/typesafe-redteam.mjs",
-    "live:typesafe-product": "node experiments/typesafe-product.mjs"
+    "live:typesafe-product": "node experiments/typesafe-product.mjs",
+    "deploy:staging": "node scripts/build-assets.mjs && wrangler deploy --env staging",
+    "load": "node scripts/load-worker.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

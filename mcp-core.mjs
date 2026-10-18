@@ -8,7 +8,7 @@ import { factsForFiles, checkFactSpecs } from "./facts.mjs";
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.8.0" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.9.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {

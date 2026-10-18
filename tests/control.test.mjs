@@ -12,9 +12,15 @@ function fakeD1() {
         events.push(args);
         return { meta: { changes: 1 } };
       }
+      if (sql.startsWith("INSERT INTO lattices")) return { meta: { changes: 1 } };
+      if (sql.startsWith("UPDATE api_keys SET last_used_at")) {
+        const r = rows.get(args[1]);
+        if (r) r.last_used_at = args[0];
+        return { meta: { changes: r ? 1 : 0 } };
+      }
       if (sql.startsWith("INSERT")) {
-        const [id, key_hash, tenant, scopes, lattices, profile, label, created_at] = args;
-        rows.set(id, { id, key_hash, tenant, scopes, lattices, profile, label, created_at, revoked_at: null });
+        const [id, key_hash, tenant, scopes, lattices, profile, label, created_at, expires_at = null] = args;
+        rows.set(id, { id, key_hash, tenant, scopes, lattices, profile, label, created_at, expires_at, revoked_at: null, last_used_at: null });
         return { meta: { changes: 1 } };
       }
       if (sql.startsWith("UPDATE")) {
@@ -105,4 +111,17 @@ test("auth hardening: long tokens, corrupted rows, profiles, key events", async 
   assert.deepEqual(ev.events.map(e => e.action), ["create", "revoke"]);
   assert.equal(ev.events[0].ip, "1.2.3.4");
   assert.equal((await authenticate(req("root-secret"), { CONTROL: fakeD1() })).status, 401, "no root key configured → root token is just invalid");
+});
+
+test("key expiry and last-used", async () => {
+  const env = { JEV_API_KEY: "root-secret", CONTROL: fakeD1() };
+  assert.equal((await createKey(env, { tenant: "acme", expires_in_days: -1 })).ok, false);
+  const k = await createKey(env, { tenant: "acme", expires_in_days: 30 });
+  assert.ok(Date.parse(k.expires_at) > Date.now() + 29 * 86400e3);
+  assert.ok((await authenticate(req(k.key), env)).ok);
+  assert.ok(env.CONTROL.rows.get(k.id).last_used_at, "last_used_at recorded");
+  env.CONTROL.rows.get(k.id).expires_at = new Date(Date.now() - 1000).toISOString();
+  const r = await authenticate(req(k.key), env);
+  assert.equal(r.status, 401);
+  assert.equal(r.error, "token expired");
 });

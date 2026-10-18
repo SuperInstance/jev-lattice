@@ -67,6 +67,13 @@ curl -sX PUT "$URL/api/acme-prod/settings" -H "authorization: Bearer $ROOT" -H '
 ```
 Providers: `typesafe` (Jev tools), `minimax` (`jev_minimax_proof`, `jev_decompose`, paraphrase sense), `workers-ai` (`jev_edge_proof`), `predicates` (Dynamic Worker sandbox). Changing settings rebuilds the lattice's tool set immediately.
 
+## Backups, environments and metrics
+- **Backups:** a cron job (03:17 UTC) writes every lattice ever written (the D1 `lattices` registry) to R2 as `lattices/<name>/<time>.json.gz`, containing state, settings, the watched state and the audit log. Backups are kept for 30 days. Root-only routes: `POST /admin/backup`, `GET /admin/backups/:name`, `POST /admin/restore/:name {key}` (audited, as `restore`).
+- **Staging:** `npm run deploy:staging` deploys `jev-lattice-staging` with its own D1, R2, rate-limit namespace and metrics dataset. Set its secrets with `--env staging`.
+- **Metrics:** the Analytics Engine dataset `jev_lattice` (`jev_lattice_staging`) gets one point per API request: `blob1` route, `blob2` lattice, `blob3` tenant, `blob4` status, `blob5` tool; `double1` latency in ms, `double2` an is-5xx flag.
+- **Request ids:** every `/mcp`, `/api` and `/admin` response carries `x-request-id`; a 500 response includes it in the body, and the log line has it.
+- **Key expiry:** `POST /admin/keys {…, "expires_in_days": 90}`. Expired keys get a 401 with `token expired`, and `GET /admin/keys` shows `last_used_at` (updated at most hourly).
+
 ## Audit log
 Each mutating call (MCP or REST, plus the idle cycle and drift watches) writes one row: who (key id or `root`, `system:idle`), which tool, whether it succeeded, how many proofs it added, and every question whose verdict changed, with the proofs that changed it. Rows live in the lattice's own SQLite storage; the newest 10,000 are kept. Export them with `GET /api/:lattice/audit` (exporting to R2 is on the P1 list).
 

@@ -5,6 +5,7 @@
 |---|---|
 | Engineer adding gates to a pipeline | [guides/ci-gates.md](guides/ci-gates.md) → [guides/typesafe.md](guides/typesafe.md) → [GATE-SEMANTICS.md](GATE-SEMANTICS.md) |
 | Deciding deployment / packaging | [PRODUCTION.md](PRODUCTION.md) |
+| On call for the Worker | [RUNBOOK.md](RUNBOOK.md) |
 | Agent / MCP integrator | [guides/agent-integrators.md](guides/agent-integrators.md) → [MCP.md](MCP.md) |
 | JS developer embedding the library | [guides/library-api.md](guides/library-api.md) |
 | Platform engineer (Cloudflare) | [CLOUDFLARE.md](CLOUDFLARE.md) |

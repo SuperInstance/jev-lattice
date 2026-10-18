@@ -2,6 +2,18 @@
 
 All notable changes. Versions follow semver once v1.0 is reached; before that, minor versions may change APIs. The state schema stays importable forward.
 
+## 0.9.0
+### Added
+- Worker: daily backups of every lattice to R2 (cron), with 30-day retention; `POST /admin/backup`, `GET /admin/backups/:name`, `POST /admin/restore/:name` (audited); a lattice registry (`GET /admin/lattices`).
+- Worker: a staging environment (`npm run deploy:staging`); Analytics Engine metrics per request; `x-request-id` on every response; JSON logs for unhandled errors.
+- Keys: `expires_in_days`, `expires_at`, `last_used_at`.
+- `scripts/load-worker.mjs`; `docs/RUNBOOK.md`.
+- CI: main → staging → smoke test → production; a `release` workflow that publishes to npm with provenance.
+### Fixed
+- `importState`: nodes without coordinates were all placed at [0, 0], so consolidate merged unrelated observations (data loss) and ran quadratically (3.5 s at 5000 nodes, now 0.26 s).
+- `consolidate()`: exact ring-based k-nearest search; output identical to 0.8, up to 3.4× faster on clustered lattices.
+- Audit: the "before" snapshot is reused, about halving write latency on large lattices.
+
 ## 0.8.0
 ### Added
 - `facts.mjs`: trusted extractors (`directive`, `size`, `duration`, `env`, `json`, `count`, `regex`); `facts` in `jev.gates.json`, `verifyFiles({facts})` and `jev_verify_files`.
