@@ -4,10 +4,14 @@ import { toolScope, hasScope, canAccessLattice, authenticate, createKey, listKey
 
 /** Minimal D1 stand-in: enough SQL for the api_keys table. */
 function fakeD1() {
-  const rows = new Map();
+  const rows = new Map(), events = [];
   const stmt = (sql, args = []) => ({
     bind: (...a) => stmt(sql, a),
     async run() {
+      if (sql.startsWith("INSERT INTO key_events")) {
+        events.push(args);
+        return { meta: { changes: 1 } };
+      }
       if (sql.startsWith("INSERT")) {
         const [id, key_hash, tenant, scopes, lattices, profile, label, created_at] = args;
         rows.set(id, { id, key_hash, tenant, scopes, lattices, profile, label, created_at, revoked_at: null });
@@ -22,9 +26,9 @@ function fakeD1() {
       return { meta: { changes: 0 } };
     },
     async first() { const r = rows.get(args[0]); return r && !r.revoked_at ? r : null; },
-    async all() { return { results: [...rows.values()] }; }
+    async all() { return { results: sql.includes("key_events") ? events.map(([at, action, key_id, tenant, detail, ip]) => ({ at, action, key_id, tenant, detail, ip })) : [...rows.values()] }; }
   });
-  return { prepare: sql => stmt(sql.trim()), batch: async () => [] };
+  return { rows, events, prepare: sql => stmt(sql.trim()), batch: async () => [] };
 }
 const req = token => new Request("https://x/", { headers: token ? { authorization: `Bearer ${token}` } : {} });
 
@@ -85,4 +89,20 @@ test("settings: defaults from env, validated patches", () => {
   assert.equal(mergeSettings(d, { profile: "gatekeeper" }).settings.profile, "gatekeeper");
   assert.equal(mergeSettings(d, { max_nodes: 0 }).ok, false);
   assert.equal(mergeSettings(d, { colour: "red" }).ok, false);
+});
+
+test("auth hardening: long tokens, corrupted rows, profiles, key events", async () => {
+  const { listKeyEvents } = await import("../worker/control.mjs");
+  const env = { JEV_API_KEY: "root-secret", CONTROL: fakeD1() };
+  assert.equal((await authenticate(req(`jev_abcdefghijkl_${"a".repeat(200)}`), env)).status, 401, "secret over 128 chars");
+  assert.equal((await authenticate(req("x".repeat(600)), env)).status, 401);
+  assert.equal((await createKey(env, { tenant: "acme", profile: "everything" })).ok, false);
+  const k = await createKey(env, { tenant: "acme", scopes: ["read"] }, { ip: "1.2.3.4" });
+  env.CONTROL.rows.get(k.id).scopes = "{not json";
+  assert.equal((await authenticate(req(k.key), env)).status, 401, "corrupted row fails closed, not 500");
+  await revokeKey(env, k.id, { ip: "1.2.3.4" });
+  const ev = await listKeyEvents(env);
+  assert.deepEqual(ev.events.map(e => e.action), ["create", "revoke"]);
+  assert.equal(ev.events[0].ip, "1.2.3.4");
+  assert.equal((await authenticate(req("root-secret"), { CONTROL: fakeD1() })).status, 401, "no root key configured → root token is just invalid");
 });

@@ -1,0 +1,439 @@
+{
+  "at": "2026-10-18T06:23:12.643Z",
+  "audit": 30,
+  "reps": 20,
+  "report": {
+    "oracle": {
+      "strict | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.619,
+        "blocked": "0/1"
+      },
+      "fixed 3% | workers-ai": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.619,
+        "blocked": "0/1"
+      },
+      "fixed 6% | workers-ai": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.804,
+        "blocked": "0/1"
+      },
+      "auto (ε known) | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.619,
+        "blocked": "0/1"
+      },
+      "auto (ε audited) | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.619,
+        "blocked": "0/1"
+      },
+      "auto (ε upper95) | workers-ai": {
+        "eps": 0.114,
+        "wrongGo": 2,
+        "recall": 0.835,
+        "blocked": "0/1"
+      },
+      "strict | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "fixed 3% | minimax": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "fixed 6% | minimax": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "auto (ε known) | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "auto (ε audited) | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "auto (ε upper95) | minimax": {
+        "eps": 0.114,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      }
+    },
+    "jev (real)": {
+      "strict | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.619,
+        "blocked": "0/1"
+      },
+      "fixed 3% | workers-ai": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.804,
+        "blocked": "0/1"
+      },
+      "fixed 6% | workers-ai": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.804,
+        "blocked": "0/1"
+      },
+      "auto (ε audited) | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.619,
+        "blocked": "0/1"
+      },
+      "auto (ε upper95) | workers-ai": {
+        "eps": 0.114,
+        "wrongGo": 2,
+        "recall": 0.835,
+        "blocked": "0/1"
+      },
+      "strict | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "fixed 3% | minimax": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "fixed 6% | minimax": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "auto (ε audited) | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      },
+      "auto (ε upper95) | minimax": {
+        "eps": 0.114,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/1"
+      }
+    },
+    "flip 2%": {
+      "strict | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.136,
+        "blocked": "4/20"
+      },
+      "fixed 3% | workers-ai": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.376,
+        "blocked": "3/20"
+      },
+      "fixed 6% | workers-ai": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.73,
+        "blocked": "0/20"
+      },
+      "auto (ε known) | workers-ai": {
+        "eps": 0.02,
+        "wrongGo": 0,
+        "recall": 0.73,
+        "blocked": "0/20"
+      },
+      "auto (ε audited) | workers-ai": {
+        "eps": 0.022,
+        "wrongGo": 0.1,
+        "recall": 0.503,
+        "blocked": "1/20"
+      },
+      "auto (ε upper95) | workers-ai": {
+        "eps": 0.147,
+        "wrongGo": 2,
+        "recall": 0.835,
+        "blocked": "0/20"
+      },
+      "strict | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.381,
+        "blocked": "12/20"
+      },
+      "fixed 3% | minimax": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.895,
+        "blocked": "2/20"
+      },
+      "fixed 6% | minimax": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/20"
+      },
+      "auto (ε known) | minimax": {
+        "eps": 0.02,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/20"
+      },
+      "auto (ε audited) | minimax": {
+        "eps": 0.022,
+        "wrongGo": 0,
+        "recall": 0.695,
+        "blocked": "6/20"
+      },
+      "auto (ε upper95) | minimax": {
+        "eps": 0.147,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/20"
+      }
+    },
+    "flip 5%": {
+      "strict | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.074,
+        "blocked": "6/20"
+      },
+      "fixed 3% | workers-ai": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.134,
+        "blocked": "6/20"
+      },
+      "fixed 6% | workers-ai": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.495,
+        "blocked": "2/20"
+      },
+      "auto (ε known) | workers-ai": {
+        "eps": 0.05,
+        "wrongGo": 0,
+        "recall": 0.786,
+        "blocked": "0/20"
+      },
+      "auto (ε audited) | workers-ai": {
+        "eps": 0.047,
+        "wrongGo": 0.2,
+        "recall": 0.64,
+        "blocked": "1/20"
+      },
+      "auto (ε upper95) | workers-ai": {
+        "eps": 0.184,
+        "wrongGo": 2,
+        "recall": 0.835,
+        "blocked": "0/20"
+      },
+      "strict | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.045,
+        "blocked": "19/20"
+      },
+      "fixed 3% | minimax": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.377,
+        "blocked": "12/20"
+      },
+      "fixed 6% | minimax": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.886,
+        "blocked": "2/20"
+      },
+      "auto (ε known) | minimax": {
+        "eps": 0.05,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/20"
+      },
+      "auto (ε audited) | minimax": {
+        "eps": 0.047,
+        "wrongGo": 0,
+        "recall": 0.895,
+        "blocked": "2/20"
+      },
+      "auto (ε upper95) | minimax": {
+        "eps": 0.184,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/20"
+      }
+    },
+    "flip 10%": {
+      "strict | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.01,
+        "blocked": "10/20"
+      },
+      "fixed 3% | workers-ai": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.01,
+        "blocked": "10/20"
+      },
+      "fixed 6% | workers-ai": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.07,
+        "blocked": "10/20"
+      },
+      "auto (ε known) | workers-ai": {
+        "eps": 0.1,
+        "wrongGo": 0.7,
+        "recall": 0.766,
+        "blocked": "0/20"
+      },
+      "auto (ε audited) | workers-ai": {
+        "eps": 0.1,
+        "wrongGo": 0.8,
+        "recall": 0.563,
+        "blocked": "0/20"
+      },
+      "auto (ε upper95) | workers-ai": {
+        "eps": 0.253,
+        "wrongGo": 2,
+        "recall": 0.835,
+        "blocked": "0/20"
+      },
+      "strict | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.045,
+        "blocked": "19/20"
+      },
+      "fixed 3% | minimax": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.045,
+        "blocked": "19/20"
+      },
+      "fixed 6% | minimax": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.277,
+        "blocked": "14/20"
+      },
+      "auto (ε known) | minimax": {
+        "eps": 0.1,
+        "wrongGo": 0,
+        "recall": 0.95,
+        "blocked": "1/20"
+      },
+      "auto (ε audited) | minimax": {
+        "eps": 0.1,
+        "wrongGo": 0,
+        "recall": 0.931,
+        "blocked": "1/20"
+      },
+      "auto (ε upper95) | minimax": {
+        "eps": 0.253,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/20"
+      }
+    },
+    "flip 20%": {
+      "strict | workers-ai": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0.004,
+        "blocked": "16/20"
+      },
+      "fixed 3% | workers-ai": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0.004,
+        "blocked": "16/20"
+      },
+      "fixed 6% | workers-ai": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0.004,
+        "blocked": "16/20"
+      },
+      "auto (ε known) | workers-ai": {
+        "eps": 0.2,
+        "wrongGo": 1.1,
+        "recall": 0.803,
+        "blocked": "0/20"
+      },
+      "auto (ε audited) | workers-ai": {
+        "eps": 0.202,
+        "wrongGo": 0.9,
+        "recall": 0.693,
+        "blocked": "0/20"
+      },
+      "auto (ε upper95) | workers-ai": {
+        "eps": 0.373,
+        "wrongGo": 2,
+        "recall": 0.835,
+        "blocked": "0/20"
+      },
+      "strict | minimax": {
+        "eps": 0,
+        "wrongGo": 0,
+        "recall": 0,
+        "blocked": "20/20"
+      },
+      "fixed 3% | minimax": {
+        "eps": 0.03,
+        "wrongGo": 0,
+        "recall": 0,
+        "blocked": "20/20"
+      },
+      "fixed 6% | minimax": {
+        "eps": 0.06,
+        "wrongGo": 0,
+        "recall": 0,
+        "blocked": "20/20"
+      },
+      "auto (ε known) | minimax": {
+        "eps": 0.2,
+        "wrongGo": 0,
+        "recall": 0.9,
+        "blocked": "2/20"
+      },
+      "auto (ε audited) | minimax": {
+        "eps": 0.202,
+        "wrongGo": 0,
+        "recall": 0.945,
+        "blocked": "1/20"
+      },
+      "auto (ε upper95) | minimax": {
+        "eps": 0.373,
+        "wrongGo": 0,
+        "recall": 1,
+        "blocked": "0/20"
+      }
+    }
+  }
+}

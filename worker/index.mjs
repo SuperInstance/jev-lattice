@@ -21,6 +21,7 @@
  *   PUT  /api/:name/auto-verify       store a Jev `state` the idle cycle re-verifies against [admin]
  *   POST /api/:name/idle              run the idle cycle now                 [admin]
  *   POST /admin/keys | GET /admin/keys | DELETE /admin/keys/:id              [root only]
+ *   GET  /admin/events                key create / revoke history            [root only]
  *   GET  /health
  * /mcp, /api and /admin require `Authorization: Bearer <key>`: the root JEV_API_KEY or a
  * tenant key issued by /admin/keys (worker/control.mjs).
@@ -28,7 +29,7 @@
 import { DurableObject } from "cloudflare:workers";
 import { JEVLattice } from "../jev-core.js";
 import { createMcp, SERVER_INFO, isMutating } from "../mcp-core.mjs";
-import { authenticate, canAccessLattice, hasScope, toolScope, rateLimit, createKey, listKeys, revokeKey, PROVIDERS, defaultSettings, mergeSettings } from "./control.mjs";
+import { authenticate, limitFailedAuth, canAccessLattice, hasScope, toolScope, rateLimit, createKey, listKeys, revokeKey, listKeyEvents, PROVIDERS, defaultSettings, mergeSettings } from "./control.mjs";
 import { createJev } from "../providers/jev.mjs";
 import { createMiniMax, MINIMAX_FAST_MODEL } from "../providers/minimax.mjs";
 import { createWorkersAI } from "../providers/workers-ai.mjs";
@@ -57,10 +58,6 @@ export class LatticeDO extends DurableObject {
     this.lattice = new JEVLattice();
     this.saved = new Map(); // node id → last persisted JSON, for diff writes
     this.settings = defaultSettings(env);
-    // audit log: one row per mutating call, with the verdicts it changed
-    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS audit (
-      seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, tool TEXT NOT NULL,
-      ok INTEGER NOT NULL, changes TEXT NOT NULL, new_proofs INTEGER NOT NULL)`);
     this.ctx.blockConcurrencyWhile(async () => {
       this.settings = { ...this.settings, ...((await this.ctx.storage.get("settings")) || {}) };
       await this.load();
@@ -153,17 +150,31 @@ export class LatticeDO extends DurableObject {
       });
     }
     const sql = this.ctx.storage.sql;
+    this.ensureAudit();
     sql.exec("INSERT INTO audit (at, actor, tool, ok, changes, new_proofs) VALUES (?, ?, ?, ?, ?, ?)",
       new Date().toISOString(), actor, tool, okOf(r) ? 1 : 0, JSON.stringify(changes), newProofs);
     sql.exec("DELETE FROM audit WHERE seq <= (SELECT MAX(seq) FROM audit) - ?", AUDIT_KEEP);
     return r;
   }
 
+  /** Created on first write, so reading a lattice that was never used leaves no storage behind. */
+  ensureAudit() {
+    if (this.auditReady) return;
+    this.ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS audit (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, tool TEXT NOT NULL,
+      ok INTEGER NOT NULL, changes TEXT NOT NULL, new_proofs INTEGER NOT NULL)`);
+    this.auditReady = true;
+  }
+
   auditLog({ limit = 50, node = null } = {}) {
     limit = Math.min(Math.max(1, Number(limit) || 50), 500);
+    const sql = this.ctx.storage.sql;
+    if (!this.auditReady && !sql.exec("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'audit'").toArray().length) return { ok: true, entries: [] };
+    this.auditReady = true;
+    // exact match on a change's id (json_each), not LIKE: node ids can contain LIKE wildcards
     const rows = node
-      ? this.ctx.storage.sql.exec("SELECT * FROM audit WHERE changes LIKE ? ORDER BY seq DESC LIMIT ?", `%"id":${JSON.stringify(String(node))}%`, limit).toArray()
-      : this.ctx.storage.sql.exec("SELECT * FROM audit ORDER BY seq DESC LIMIT ?", limit).toArray();
+      ? sql.exec("SELECT * FROM audit WHERE EXISTS (SELECT 1 FROM json_each(audit.changes) WHERE json_extract(value, '$.id') = ?) ORDER BY seq DESC LIMIT ?", String(node), limit).toArray()
+      : sql.exec("SELECT * FROM audit ORDER BY seq DESC LIMIT ?", limit).toArray();
     return { ok: true, entries: rows.map(r => ({ ...r, ok: !!r.ok, changes: JSON.parse(r.changes) })) };
   }
 
@@ -243,8 +254,8 @@ export class LatticeDO extends DurableObject {
   }
 
   /** Test/ops hook: run the idle cycle now instead of waiting for the alarm. */
-  async runIdleCycle() {
-    await this.alarm();
+  async runIdleCycle(principal = ROOT) {
+    await this.audited(principal.id, "idle_cycle", () => this.alarm());
     return { ok: true, ...(await this.ctx.storage.get("last_idle_cycle")) };
   }
 
@@ -318,20 +329,43 @@ async function handleMcp(req, stub, principal) {
   return json(Array.isArray(body) ? out : out[0]);
 }
 
+/** Read a request body as text, stopping at `max` bytes (→ null when over). */
+async function readCapped(req, max) {
+  const reader = req.body.getReader();
+  const chunks = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > max) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  const buf = new Uint8Array(n);
+  let o = 0;
+  for (const c of chunks) { buf.set(c, o); o += c.byteLength; }
+  return new TextDecoder().decode(buf);
+}
+
 const result = r => json(r, r?.ok === false ? (/^forbidden/.test(r.error || "") ? 403 : /^quota/.test(r.error || "") ? 429 : 400) : 200);
 
 /** Key management: root only. */
 async function handleAdmin(req, env, principal, parts) {
   if (!principal.root) return json({ ok: false, error: "forbidden: key management needs the root key" }, 403);
   if (!env.CONTROL) return json({ ok: false, error: "no CONTROL D1 binding configured" }, 501);
+  const ip = req.headers.get("cf-connecting-ip");
+  if (parts[1] === "events" && req.method === "GET") return json(await listKeyEvents(env, Number(new URL(req.url).searchParams.get("limit")) || 100));
   if (parts[1] !== "keys") return json({ ok: false, error: "not found" }, 404);
   if (req.method === "POST" && !parts[2]) {
-    const r = await createKey(env, (await req.json().catch(() => null)) || {});
+    const r = await createKey(env, (await req.json().catch(() => null)) || {}, { ip });
     return json(r, r.ok ? 201 : 400);
   }
   if (req.method === "GET" && !parts[2]) return json(await listKeys(env));
   if (req.method === "DELETE" && parts[2]) {
-    const r = await revokeKey(env, parts[2]);
+    const r = await revokeKey(env, parts[2], { ip });
     return json(r, r.ok ? 200 : 404);
   }
   return json({ ok: false, error: "not found" }, 404);
@@ -347,11 +381,20 @@ export default {
 
     if (parts[0] === "mcp" || parts[0] === "api" || parts[0] === "admin") {
       const auth = await authenticate(req, env);
-      if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status, { "www-authenticate": "Bearer" });
+      if (!auth.ok) {
+        const lim = await limitFailedAuth(env, req);
+        if (!lim.ok) return json({ ok: false, error: lim.error }, 429, { "retry-after": "10" });
+        return json({ ok: false, error: auth.error }, auth.status, { "www-authenticate": "Bearer" });
+      }
       const principal = auth.principal;
-      // bound request size before parsing (states and file maps can be large, but not unbounded)
+      // bound request size before parsing: the declared length, and the actual bytes (chunked uploads have none)
       const max = Number(env.JEV_MAX_BODY_BYTES) || 4 * 1024 * 1024;
       if (Number(req.headers.get("content-length") || 0) > max) return json({ ok: false, error: `request body exceeds ${max} bytes` }, 413);
+      if (req.body) {
+        const text = await readCapped(req, max);
+        if (text === null) return json({ ok: false, error: `request body exceeds ${max} bytes` }, 413);
+        req = new Request(req, { body: text });
+      }
 
       if (parts[0] === "admin") return handleAdmin(req, env, principal, parts);
 
@@ -377,7 +420,7 @@ export default {
       if (kind === "settings" && req.method === "PUT") return need("admin") || result(await stub.putSettings(await body(), principal));
       if (kind === "auto-verify" && req.method === "PUT") return need("admin") || json(await stub.setAutoVerify(await body(), principal));
       if (kind === "auto-verify" && req.method === "DELETE") return need("admin") || json(await stub.setAutoVerify(null, principal));
-      if (kind === "idle" && req.method === "POST") return need("admin") || json(await stub.runIdleCycle());
+      if (kind === "idle" && req.method === "POST") return need("admin") || json(await stub.runIdleCycle(principal));
       if (kind === "tool" && arg && req.method === "POST") return result(await stub.tool(arg, (await body()) ?? {}, principal));
       return json({ ok: false, error: "not found" }, 404);
     }

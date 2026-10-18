@@ -125,7 +125,7 @@ Persist `lattice.exportState()` between runs (as an artifact or a cache) to keep
 npx -p jev-lattice jev gate --config jev.gates.json    # exit 0 = all GO, 1 = not all GO (fails closed), 2 = config error
 ```
 ```yaml
-- uses: SuperInstance/jev-lattice@v0.6
+- uses: SuperInstance/jev-lattice@v0.7
   with: { config: jev.gates.json, typesafe-token: "${{ secrets.TYPESAFE_AI_TOKEN }}" }
 ```
 Proofs for unchanged files are reused between runs, so a run with no changes makes no API calls. Guide: [docs/guides/ci-gates.md](docs/guides/ci-gates.md).
@@ -138,23 +138,29 @@ Add this to your MCP client config (Claude Code, Cursor, or any MCP host):
     "jev-lattice": {
       "command": "node",
       "args": ["/abs/path/jev-lattice/mcp-server.mjs"],
-      "env": { "JEV_STATE_PATH": "/abs/path/state.json", "TYPESAFE_AI_TOKEN": "…", "MINIMAX_TOKEN": "…" }
+      "env": { "JEV_STATE_PATH": "/abs/path/state.json", "TYPESAFE_AI_TOKEN": "…", "JEV_PROFILE": "gatekeeper", "JEV_MODEL": "jev-1.13.0" }
     }
   }
 }
 ```
-The agent gets `jev_ingest`, `jev_verify_files`, `jev_evaluate_go_no_go` and the rest of the tools. Tools for providers you haven't configured are hidden. Recipes and pitfalls are in [docs/guides/agent-integrators.md](docs/guides/agent-integrators.md).
+With `JEV_PROFILE=gatekeeper` the agent gets six tools: `jev_ingest`, `jev_verify_files`, `jev_verify_open`, `jev_evaluate_go_no_go`, `jev_list_nodes` and `jev_get_node`. That is the recommended setup: a narrower surface made agents 33% cheaper and stopped them "refuting" unknowable requirements. Leave the profile out to get every tool. Tools for providers you haven't configured are hidden. Recipes and pitfalls are in [docs/guides/agent-integrators.md](docs/guides/agent-integrators.md).
 
 ### Run it on Cloudflare (MCP over HTTP + Durable Objects)
 ```bash
 export CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…
 npm run deploy
-printf %s "$JEV_API_KEY"       | npx wrangler secret put JEV_API_KEY        # required: bearer auth
+npx wrangler d1 create jev-control                                           # once; put its id in wrangler.jsonc
+printf %s "$JEV_API_KEY"       | npx wrangler secret put JEV_API_KEY        # required: the root key
 printf %s "$TYPESAFE_AI_TOKEN" | npx wrangler secret put TYPESAFE_AI_TOKEN
 printf %s "$MINIMAX_TOKEN"     | npx wrangler secret put MINIMAX_TOKEN
 node scripts/smoke-worker.mjs https://jev-lattice.<you>.workers.dev "$JEV_API_KEY" --live
 ```
-Each lattice name gets its own Durable Object, reachable at `POST /mcp/<name>` and `/api/<name>/…`. The deployment includes:
+Each lattice name gets its own Durable Object, reachable at `POST /mcp/<name>` and `/api/<name>/…`. Issue each client its own key, scoped to what it may do and which lattices it may touch:
+```bash
+curl -sX POST https://…/admin/keys -H "authorization: Bearer $JEV_API_KEY" -H 'content-type: application/json' \
+     -d '{"tenant":"acme","scopes":["verify"],"profile":"gatekeeper"}'     # → jev_… (shown once), lattices acme-*
+```
+Scopes are `read`, `verify` and `admin`. Every mutating call is written to the lattice's audit log (`GET /api/<name>/audit`) with the verdicts it changed. Lattices only send evidence to TypeSafe unless you enable other providers in their settings. The deployment includes:
 - the proof cache;
 - the drift detector (`PUT /api/<name>/auto-verify`);
 - sandboxed compiled predicates (Dynamic Workers);
@@ -187,7 +193,11 @@ The Durable Object hashes the state, retires proofs built on older content, and 
 | `JEV_TIER` | MCP stdio | `minimal` \| `standard` \| `high` (default: probed from RAM/CPU) |
 | `JEV_CACHE` / `JEV_CACHE_TTL_MS` | MCP stdio, Worker | proof cache on/off (default on) / lifetime (default 24h) |
 | `JEV_NO_PROVIDERS=1` | MCP stdio | hide provider tools (offline, tests) |
-| `JEV_API_KEY` | Worker (secret) | bearer key for `/mcp` and `/api`; access is refused when it isn't set |
+| `JEV_API_KEY` | Worker (secret) | root key: all scopes, and key management (`/admin/keys`); access is refused when it isn't set and no tenant key matches |
+| `JEV_MODEL` | library, CLI, MCP, Worker, Action (`model`) | pin the Jev model (Worker default `jev-1.13.0`; otherwise `jev-latest`) |
+| `JEV_PROFILE` | MCP stdio | `gatekeeper` \| `reader` tool profile |
+| `JEV_DEFAULT_PROVIDERS` | Worker | providers a new lattice may use (default `typesafe`) |
+| `JEV_MAX_NODES`, `JEV_MAX_PROOFS_PER_NODE` | Worker | per-lattice quotas (5000, 200) |
 | `MINIMAX_MODEL` | Worker | default `MiniMax-M3.1-Flash-Preview` (use `MiniMax-M3` for heavy reasoning) |
 | `WORKERS_AI_MODEL` | Worker | default `@cf/meta/llama-3.1-8b-instruct-fast` |
 | `MINIMAX_TIMEOUT_MS`, `MINIMAX_MAX_TOKENS` | `providers/minimax.mjs` CLI | for long generations; `--think` selects M3 |
@@ -198,7 +208,8 @@ The Durable Object hashes the state, retires proofs built on older content, and 
 
 | Command | What it covers | Needs |
 |---|---|---|
-| `npm test` | gate, regressions, orchestrator, proof cache, compiled predicates, calibration, senses, MCP stdio end-to-end, README examples | nothing |
+| `npm test` | gate, conformance vectors, regressions, orchestrator, proof cache, compiled predicates, calibration, senses, grouping, Worker control plane, MCP stdio end-to-end, type/runtime parity, README examples | nothing |
+| `npm run typecheck` | the TypeScript declarations in `types/` | dev dependencies |
 | `npm run test:browser` | browser UI end-to-end (Playwright) | Chromium |
 | `node scripts/smoke-worker.mjs <url> <key> [--live]` | a deployed Worker, end to end | deployed Worker |
 | `npm pack --dry-run` | what the npm package ships (product files only) | nothing |
@@ -253,6 +264,8 @@ Selected results. Every number has a script in `experiments/` and raw output in 
 - **Compiled code:** trusted alone, it produced 5–24 wrong GOs under format drift. In the right trust direction it gave 0 wrong GOs at half the Jev cost.
 - **Long states** (300-resource Terraform plans): slicing the state and lifting verdicts reached 0.976 correct, vs 0.53 when multiplying probabilities. Convolving count distributions was perfect.
 - **Agents:** a MiniMax agent driving the lattice made 16/16 correct deploy decisions and relayed the verdicts verbatim. An *uninstructed* agent also chose the lattice (8/8), but over-explored the tools.
+- **Model upgrades:** `jev-1.13.0` → `jev-1.14.0` moved 4.7–6.2% of verdicts, 2–2.5× the re-ask rate, with the same accuracy. Pin the model.
+- **Choice-first grouping** generalised to nginx and env files: 0 wrong GOs, recall 0.978 → 1.000, 31% fewer questions.
 
 ---
 
@@ -263,14 +276,17 @@ gate.mjs               config-driven gating (jev gate / GitHub Action)
 bin/jev.mjs            CLI: gate · check-config · mcp · version
 orchestrator.mjs       verifiers → proofs: verify, fan-out, per-file, decompose, roll-up, compile, drift
 proof-cache.mjs        content-addressed answers (memory / Durable Object storage) + stability probe
-compiled.mjs           model-written predicates: compile, validate, schedule, quarantine, heal
-senses.mjs             cross-sense teaching: label bank, learned thresholds
-calibration.mjs        isotonic maps + reliability metrics (analysis)
+compiled.mjs           [experimental] model-written predicates: compile, metamorphic validation, schedule, heal
+senses.mjs             [experimental] cross-sense teaching: label bank, learned thresholds, teacher noise
+calibration.mjs        [experimental] isotonic maps + reliability metrics (analysis)
+grouping.mjs           [experimental] Choice-first grouping: propose, validate, ask
+types/                 TypeScript declarations for the stable API (+ typecheck)
+conformance/           gate conformance vectors (hand-computed) for other implementations
 mcp-core.mjs           MCP tool definitions + JSON-RPC dispatch (transport-agnostic)
 mcp-server.mjs         stdio MCP server
 harness.mjs            capacity probe → policy tier
 providers/             jev.mjs (TypeSafe) · minimax.mjs (+ CLI) · workers-ai.mjs
-worker/                Cloudflare Worker + LatticeDO + sandboxed predicates
+worker/                Cloudflare Worker + LatticeDO + control plane (keys, scopes) + sandboxed predicates
 browser/               canvas UI + edge sync
 examples/              runnable examples (tested)
 experiments/           benches, generators, results

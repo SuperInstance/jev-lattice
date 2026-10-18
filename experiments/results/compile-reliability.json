@@ -1,0 +1,117 @@
+{
+  "at": "2026-10-18T06:37:52.754Z",
+  "RUNS": 2,
+  "rewrites": {
+    "proposed": 40,
+    "kept": 40,
+    "dropped": 0
+  },
+  "results": [
+    {
+      "run": 0,
+      "arms": {
+        "v0.6": {
+          "produced_code": 6,
+          "accepted": 6,
+          "generations": 18,
+          "rejected_by_metamorphic": 0,
+          "in-dist": {
+            "n": 180,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 180,
+            "wrongGo": 0,
+            "wrongNo": 34
+          }
+        },
+        "retry+meta": {
+          "produced_code": 9,
+          "accepted": 7,
+          "generations": 37,
+          "rejected_by_metamorphic": 2,
+          "in-dist": {
+            "n": 210,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 210,
+            "wrongGo": 0,
+            "wrongNo": 32
+          }
+        },
+        "retry": {
+          "produced_code": 9,
+          "accepted": 9,
+          "generations": 27,
+          "rejected_by_metamorphic": 0,
+          "in-dist": {
+            "n": 270,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 270,
+            "wrongGo": 2,
+            "wrongNo": 45
+          }
+        }
+      }
+    },
+    {
+      "run": 1,
+      "arms": {
+        "v0.6": {
+          "produced_code": 6,
+          "accepted": 6,
+          "generations": 15,
+          "rejected_by_metamorphic": 0,
+          "in-dist": {
+            "n": 180,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 180,
+            "wrongGo": 5,
+            "wrongNo": 15
+          }
+        },
+        "retry+meta": {
+          "produced_code": 9,
+          "accepted": 8,
+          "generations": 27,
+          "rejected_by_metamorphic": 0,
+          "in-dist": {
+            "n": 240,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 240,
+            "wrongGo": 0,
+            "wrongNo": 37
+          }
+        },
+        "retry": {
+          "produced_code": 8,
+          "accepted": 8,
+          "generations": 26,
+          "rejected_by_metamorphic": 0,
+          "in-dist": {
+            "n": 240,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 240,
+            "wrongGo": 0,
+            "wrongNo": 38
+          }
+        }
+      }
+    }
+  ]
+}

@@ -19,6 +19,8 @@ Environment:
 | `JEV_NO_PROVIDERS` | — | `1` hides provider tools (offline / tests) |
 | `JEV_CACHE` | on | `0` disables the (state hash, question) proof cache |
 | `JEV_CACHE_TTL_MS` | 86400000 | proof-cache entry lifetime |
+| `JEV_PROFILE` | all tools | `gatekeeper` (6 tools: ingest, verify_files, verify_open, evaluate, list, get) or `reader` (read-only) |
+| `JEV_MODEL` | `jev-latest` | pin the Jev model, e.g. `jev-1.13.0`; verdicts move a few percent across versions |
 
 ## Tools
 
@@ -49,11 +51,16 @@ Names are prefixed `jev_` on the wire. Availability depends on what's configured
 | `jev_predicate_register` | Worker (Loader) | **question**, **code**, **labels** | Sandboxed predicate, validated in its isolate |
 | `jev_predicate_proof` | Worker (Loader) | **id**, **text**, question, channel | Compiled YES = 0.8 (hint), NO = 0.01 |
 | `jev_teach` | Jev (Worker) | **files**, ids, senses, rules | Decided gates label each sense's reading |
-| `jev_sense_report` | Jev (Worker) | ids, minSamples, minGo, floor, minGoForDiscount | Per question × sense reliability + learned bar |
+| `jev_sense_report` | Jev (Worker) | ids, minSamples, minGo, floor, minGoForDiscount, teacherErrorRate | Per question × sense reliability + learned bar |
 | `jev_sense_probe` | Jev (Worker) | **files**, ids, senses, addProofs, rules | Run senses with no teacher |
-| `jev_apply_learned` | Jev (Worker) | ids, minSamples, minGo, floor, minGoForDiscount | Write learned bars / blocks into each spec |
+| `jev_apply_learned` | Jev (Worker) | ids, minSamples, minGo, floor, minGoForDiscount, teacherErrorRate | Write learned bars / blocks into each spec |
+| `jev_audit` | Worker | limit, node | Verdict-change log: actor, tool, which gates moved |
+| `jev_settings` | Worker | — | Enabled providers, default profile, quotas, pinned model |
 
-Mutating calls persist state: to `JEV_STATE_PATH` on stdio, to Durable Object storage on the Worker.
+## Tool profiles and authorisation
+`createMcp({ profile })` (stdio: `JEV_PROFILE`) limits the tool surface; `handle(msg, ctx)` accepts a per-request `ctx = { allow(name) → true | reason, guard(name, args) → null | reason, profile }`. `tools/list` returns only the tools that are both in the profile and allowed. A call to any other tool returns an MCP result with `isError: true` and `forbidden: …` (or `quota: …` from `guard`), never a protocol error, so agents can read why. The Worker builds `ctx` from the caller's key (scopes, profile) and the lattice's quotas. *Why profiles:* in R4-E the 6-tool surface made 33% fewer calls and kept unknowable gates OPEN 7/8 times vs 3/8 (T39).
+
+Mutating calls persist state: to `JEV_STATE_PATH` on stdio, to Durable Object storage on the Worker (where each one is also written to the audit log).
 
 ## Example session (conceptual)
 

@@ -7,7 +7,7 @@
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.6.0" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.7.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -173,11 +173,11 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
       { name: "jev_teach", description: "Cross-sense teaching: for each DECIDED question, run the weaker senses (jev-whole, jev-paraphrase, workers-ai, compiled) on the same `files` and bank (p, verdict) as a label.",
         inputSchema: { type: "object", properties: { files: FILES, ids: { type: "array", items: { type: "string" } }, senses: { type: "array", items: { type: "string" } }, rules: { type: "string" } }, required: ["files"] } },
       { name: "jev_sense_report", description: "Per question × sense: accuracy and Brier against teacher labels, and the learned safe threshold (or why there is none).",
-        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" } } } },
+        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" }, teacherErrorRate: { type: "number", minimum: 0, maximum: 0.5, description: "measured flip rate of the teacher; forgives the disagreements such a teacher would plausibly cause (0 = strict)" } } } },
       { name: "jev_sense_probe", description: "Run senses with no teacher; return p per question per sense. addProofs=true appends SENSE:<name> proofs.",
         inputSchema: { type: "object", properties: { files: FILES, ids: { type: "array", items: { type: "string" } }, senses: { type: "array", items: { type: "string" } }, addProofs: { type: "boolean" }, rules: { type: "string" } }, required: ["files"] } },
       { name: "jev_apply_learned", description: "Write learned per-sense thresholds into each question's spec (source_thresholds) and block senses with no safe threshold (blocked_sources).",
-        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" } } } }
+        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" }, teacherErrorRate: { type: "number", minimum: 0, maximum: 0.5, description: "measured flip rate of the teacher; forgives the disagreements such a teacher would plausibly cause (0 = strict)" } } } }
     );
   }
   if (hasJev || hasMiniMax) {

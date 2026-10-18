@@ -40,7 +40,8 @@ async function ask(text) {
   const derived = {};
   groups.forEach((g, i) => {
     const probs = d.answers[`g${i}`]?.probabilities || {};
-    for (const m of g.derived) derived[m.q] = Math.min(1, (m.allowed || []).reduce((s, o) => s + (Number(probs[o]) || 0), 0));
+    // first group wins if two map the same question (grouping.mjs validates each mapping separately)
+    for (const m of g.derived) if (!(m.q in derived)) derived[m.q] = Math.min(1, (m.allowed || []).reduce((s, o) => s + (Number(probs[o]) || 0), 0));
   });
   return { noul: Object.fromEntries(QUESTIONS.map((_, j) => [`q${j}`, d.answers[`q${j}`].noul])), derived };
 }

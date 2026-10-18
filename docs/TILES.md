@@ -43,7 +43,15 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T37 | Noise fails safe; tolerance = the teacher's measured error rate | `learnThreshold({tolerance})` | proven (offline) |
 | T38 | A gate rule on a noisy boundary moves the boundary | `require_firm` (opt-in) | negative result |
 | T39 | Curated tool surface for agents | `experiments/agent-v2.mjs` | proven (edge) |
-| T40 | Automatic Choice-first grouping, validated by Nouls | `experiments/choice-grouping.mjs` | proven |
+| T40 | Automatic Choice-first grouping, validated by Nouls | `grouping.mjs` (was `experiments/choice-grouping.mjs`) | proven, generalised (R5-B) |
+| T41 | Scope by consequence, audit the decision delta | `worker/control.mjs`, `LatticeDO.audited` | deployed |
+| T42 | Authorisation hooks in the protocol core, refusals as results | `mcp-core.mjs` `handle(msg, ctx)` | deployed |
+| T43 | Pin the judge; measure upgrades against the re-ask floor | `JEV_MODEL`, `experiments/model-upgrade.mjs` | proven |
+| T44 | Teacher noise → binomial allowance | `senses.mjs` `allowedDisagreements` | proven (offline) |
+| T45 | Hand-computed conformance vectors | `conformance/` | shipped |
+| T46 | Falsifiable review prompts | `docs/journal/r5-control-plane-review.*` | proven (1 review) |
+| T47 | Let the proposer abstain; key by (group, question) | `grouping.mjs` | proven |
+| T48 | Regenerate unusable output before judging it | `compiled.mjs` `genRetries`, `extractCode` | proven |
 
 ---
 
@@ -181,3 +189,29 @@ With the same agent and prompt, 6 tools instead of 23 meant 33% fewer calls, and
 
 ### T40: Automatic Choice-first grouping
 MiniMax proposes field-level Choice questions with mappings to the existing yes/no questions. Each mapping is accepted only if it agrees with Jev's Nouls on training data. Accepted mappings beat the Nouls on held-out data (Brier 0.0001 vs 0.0056, recall 1.00 vs 0.965) with 0 wrong.
+
+## Round 5 tiles (v0.7)
+
+### T41: Scope by consequence, audit the decision delta
+Grant permissions by what a call can *change*: `read` (nothing), `verify` (adds evidence), `admin` (replaces the lattice or its policy). Unknown tools default to the middle scope, never to read. Audit by snapshotting the decisions before and after each mutating call and storing only what moved, with the evidence that moved it. That answers "who moved this gate?" directly; a request log can't. *Where:* `worker/control.mjs`, `LatticeDO.audited`.
+
+### T42: Authorisation hooks in the protocol core, refusals as results
+Put `allow(name)` and `guard(name, args)` hooks in the transport-agnostic dispatcher, and return refusals as tool results (`isError`, `forbidden:` / `quota:`) rather than protocol errors. Every transport gets the same enforcement, and agents can read why they were refused. *Where:* `mcp-core.mjs` `handle(msg, ctx)`.
+
+### T43: Pin the judge; measure an upgrade against the re-ask floor
+An upgrade's flips mean something only next to the same model's re-ask flips. Jev 1.13.0 → 1.14.0: 2–2.5× the re-ask flip rate and ≈3× the mean |Δp|, with the same accuracy. Pin the model, key caches on it, and treat an upgrade as a migration (re-verify once, review what moved). *Where:* `JEV_MODEL`, `experiments/model-upgrade.mjs`.
+
+### T44: Teacher noise → a binomial allowance, from a point-estimated audit
+Forgive the number of disagreements that a teacher with flip rate ε would plausibly produce among m samples (`allowedDisagreements(m, ε)`), not a fixed fraction. Estimate ε from a hand-checked sample of at least 30 labels, using the point estimate (the Wilson upper bound let wrong GOs through even with a perfect teacher). It is safe up to about 5% noise; beyond that, fix the teacher. *Where:* `senses.mjs`.
+
+### T45: Hand-computed conformance vectors
+Write the spec's cases as data, with expectations computed from the prose by hand. Never generate them from the implementation. They become a cross-implementation test, and writing them tests the spec itself: this found a false claim about OPEN margins. *Where:* `conformance/gate-vectors.json`.
+
+### T46: Falsifiable review prompts for model reviewers
+Ask a reviewer model for a stated threat model, an exploit sequence per finding, and an explicit "not sure". MiniMax-M3's security review went from 21% to 85% real findings, and its one "not sure" was its one false finding. *Where:* `docs/journal/r5-control-plane-review.*`.
+
+### T47: Let the proposer abstain; key derived answers by (group, question)
+When a model proposes structure (groups, decompositions), the prompt must allow "nothing here". MiniMax then grouped only same-field questions and left three different redis settings alone. Validate each mapping on its own, and key derived values by (group, question), so that two proposals for one question can't overwrite each other. *Where:* `grouping.mjs`.
+
+### T48: Regenerate unusable model output before judging it
+Separate "the output wasn't usable" (no code, a parse or compile error) from "the code was wrong" (disagreed with labels). Regenerate the first cheaply, without spending a validation attempt, and extract code from fences or bare arrows as well as JSON. Usable candidates: 60% → 85–90%. *Where:* `compilePredicate({genRetries})`, `extractCode`.

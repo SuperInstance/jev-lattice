@@ -107,3 +107,28 @@ test("healQuarantined recompiles from counterexamples + remembered labels", asyn
   assert.equal(reg.get(Q).version, 2);
   assert.equal(reg.get(Q).fn("TLS-PORT 1"), true);
 });
+
+test("extractCode tolerates fences and bare arrows", async () => {
+  const { extractCode } = await import("../compiled.mjs");
+  assert.equal(extractCode('{"code": "t => true"}'), "t => true");
+  assert.equal(extractCode("Here:\n```js\n(text) => text.includes('x');\n```"), "(text) => text.includes('x')");
+  assert.equal(extractCode("text => /a/.test(text)"), "text => /a/.test(text)");
+  assert.throws(() => extractCode("I cannot help"));
+});
+
+test("compilePredicate: unusable output is regenerated, not counted as an attempt", async () => {
+  const r = await compilePredicate({ mm: fakeMM(["not code at all", TRUE_TLS]), question: Q, rules: "", labeled, sandbox, maxAttempts: 1, genRetries: 1 });
+  assert.equal(r.accepted, true);
+  assert.equal(r.attempts, 1);
+  assert.equal(r.generations, 2);
+});
+
+test("compilePredicate: metamorphic labels reject a predicate that only fits the originals", async () => {
+  const brittle = "t => t.split('\\n').some(l => /^tls-port \\d+/.test(l))"; // exact case/spacing only
+  const meta = [{ text: "TLS-PORT   6380", p: 0.99 }, { text: "  tls-port 6380", p: 0.99 }];
+  const plain = await compilePredicate({ mm: fakeMM([brittle]), question: Q, rules: "", labeled, sandbox, maxAttempts: 1 });
+  const strict = await compilePredicate({ mm: fakeMM([brittle]), question: Q, rules: "", labeled, sandbox, maxAttempts: 1, metamorphic: meta });
+  assert.equal(plain.accepted, true);
+  assert.equal(strict.accepted, false);
+  assert.equal(strict.metamorphic_disagreements, 2);
+});

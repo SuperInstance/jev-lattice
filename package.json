@@ -1,21 +1,44 @@
 {
   "name": "jev-lattice",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Deterministic go/no-go gates over calibrated evidence: TypeSafe Jev verification, proof cache, per-file drift, MCP server, CLI + GitHub Action, Cloudflare Durable Object deployment",
   "type": "module",
   "main": "jev-core.js",
   "exports": {
-    ".": "./jev-core.js",
-    "./orchestrator": "./orchestrator.mjs",
-    "./proof-cache": "./proof-cache.mjs",
-    "./compiled": "./compiled.mjs",
-    "./calibration": "./calibration.mjs",
-    "./senses": "./senses.mjs",
-    "./mcp": "./mcp-core.mjs",
-    "./providers/jev": "./providers/jev.mjs",
+    ".": {
+      "types": "./types/jev-core.d.ts",
+      "default": "./jev-core.js"
+    },
+    "./orchestrator": {
+      "types": "./types/orchestrator.d.ts",
+      "default": "./orchestrator.mjs"
+    },
+    "./proof-cache": {
+      "types": "./types/proof-cache.d.ts",
+      "default": "./proof-cache.mjs"
+    },
+    "./gate": {
+      "types": "./types/gate.d.ts",
+      "default": "./gate.mjs"
+    },
+    "./mcp": {
+      "types": "./types/mcp.d.ts",
+      "default": "./mcp-core.mjs"
+    },
+    "./providers/jev": {
+      "types": "./types/providers-jev.d.ts",
+      "default": "./providers/jev.mjs"
+    },
     "./providers/minimax": "./providers/minimax.mjs",
     "./providers/workers-ai": "./providers/workers-ai.mjs",
-    "./gate": "./gate.mjs"
+    "./experimental/compiled": "./compiled.mjs",
+    "./experimental/senses": "./senses.mjs",
+    "./experimental/calibration": "./calibration.mjs",
+    "./experimental/grouping": "./grouping.mjs",
+    "./compiled": "./compiled.mjs",
+    "./senses": "./senses.mjs",
+    "./calibration": "./calibration.mjs",
+    "./package.json": "./package.json"
   },
   "bin": {
     "jev": "./bin/jev.mjs",
@@ -46,9 +69,14 @@
     "deploy": "npm run build:assets && wrangler deploy",
     "smoke": "node scripts/smoke-worker.mjs",
     "prepublishOnly": "npm test",
-    "gate": "node bin/jev.mjs gate"
+    "gate": "node bin/jev.mjs gate",
+    "typecheck": "tsc -p types/tsconfig.json",
+    "live:model-upgrade": "node experiments/model-upgrade.mjs",
+    "live:compile-reliability": "node experiments/compile-reliability.mjs",
+    "live:grouping-repo": "node experiments/grouping-repo.mjs"
   },
   "devDependencies": {
+    "typescript": "^5.9.3",
     "wrangler": "^4.151.1"
   },
   "keywords": [
@@ -79,6 +107,10 @@
     "mcp-server.mjs",
     "harness.mjs",
     "gate.mjs",
+    "grouping.mjs",
+    "types/",
+    "conformance/",
+    "worker/control.mjs",
     "bin/",
     "providers/",
     "worker/index.mjs",
@@ -111,5 +143,6 @@
   "publishConfig": {
     "access": "public",
     "provenance": true
-  }
+  },
+  "types": "./types/jev-core.d.ts"
 }

@@ -201,6 +201,19 @@ Full narrative, with alternatives and mistakes, in [JOURNAL.md](JOURNAL.md) §3.
 | R4-E agent, redesigned (`agent-v2.mjs`, edge MCP, scored from lattice state) | Full vs curated tool surface, neutral prompt, 8 runs each, half of them "tempting" (both decidable requirements met). Both arms: **16/16 correct decisions, 0 overclaimed GO**, unknowable gate never GO. Curated: **33% fewer tool calls** (9.5 vs 14.1), and the unknowable gate stayed OPEN in 7/8 runs vs 3/8 on the full surface. With more proof sources available, the agent manufactured confident "no"s from absence of evidence. |
 | R4-B Choice-first grouping (`choice-grouping.mjs`) | MiniMax proposed 7 field-level Choice groups; Jev-Noul validation accepted 9/10 mappings. Held-out: derived Brier **0.0001** vs 0.0056, ECE 0.0015 vs 0.0374, recall @0.9 **1.000** vs 0.965, 0 wrong. The largest gains were on bind-address questions (Noul recall 0.73–0.87 → 1.00). Questions per config: 10 → 8. |
 
+## 2026-10-18: round 5 (v0.7)
+Narrative in [JOURNAL.md](JOURNAL.md) §5.
+
+| experiment | headline |
+|---|---|
+| R5-A compile reliability (`compile-reliability.mjs`, 2 runs × 3 arms × 10 questions) | **Regenerating unusable output** (fence/arrow extraction + up to 2 retries) raised usable code from **6/10 to 8–9/10**. Wrong GOs after the format shift: v0.6 acceptance **0 / 5**, regeneration alone **2 / 0**, regeneration + metamorphic **0 / 0** (metamorphic now has 0 wrong GOs in 4 of 4 runs across R4-D and R5-A). **New finding:** every arm produced many wrong **NOs** after the shift (15–45 of 180–270 answers); metamorphic rewrites did not prevent them (32 / 37). Under refute-only trust a wrong NO is a wrong REFUTED: it fails closed, but blocks good deploys until a spot-check or quarantine catches it. Cost: 168 MiniMax calls, 1.08M completion tokens (Flash reasoning). |
+| R5-B grouping generalisation (`grouping-repo.mjs`, redis/nginx/env, 13 questions) | Auto-trigger (≥ 3 questions per file) fired on all 3 files. MiniMax proposed **no** groups for the 3 redis questions (three different settings, which is correct) and grouped only same-field questions in nginx (listener) and app.env (DEBUG, LOG_LEVEL); gzip, HSTS and SENTRY_DSN stayed Nouls. Validation accepted **7/7** proposed mappings. Held-out 40 repos: derived Brier **0** vs 0.0008, recall@0.9 **1.000** vs 0.978, 0 wrong GOs; questions asked **520 → 360 (−31%)**. The largest gain was the negated question "listens only on port 80?" (Noul recall 0.824 → 1.000). |
+| R5-C automatic tolerance (`auto-tolerance.mjs`, offline, 20 seeds) | `learnThreshold({teacherErrorRate: ε})` forgives the disagreements a teacher with flip rate ε would plausibly produce (binomial 95%). With ε known: **0 wrong GOs up to 5% noise and higher recall than every fixed tolerance** (2% noise, MiniMax: 1.00 vs strict 0.38; 5%: 1.00 vs best fixed 0.89). At 10–20% noise the weaker student (Workers AI) gets 0.7–1.1 wrong GOs: the allowance starts forgiving the student's own errors. ε from a 30-label audit (point estimate) is close to ε known; the Wilson **upper bound** is too loose (2 wrong GOs even with a perfect teacher). Real Jev audits at ε = 0, which keeps the strict rule. |
+| R5-D curated tool profiles (shipped, no new experiment) | `gatekeeper` (6 tools) and `reader` profiles on stdio (`JEV_PROFILE`) and HTTP (per key or per lattice). Live smoke: a gatekeeper key lists exactly the 6 tools; other calls return `forbidden: … not in the "gatekeeper" tool profile`. The basis is R4-E. |
+| R5-E model upgrade (`model-upgrade.mjs`, jev-1.13.0 ×2 vs jev-1.14.0, 300 + 600 cases) | Re-ask flips **3.0% / 2.5%**; upgrade flips **4.7% / 6.2%** (2–2.5×). Mean \|Δp\| 0.0058 / 0.0047 re-ask vs **0.0158 / 0.0159** upgrade (≈3×), and upgrade flips are less concentrated near the bar (3/14 and 21/37 within 0.02 vs 6/9 and 10/15 for re-asks). Accuracy is unchanged (decided-correct 529–532 / 600 for both models) and there are 0 wrong GOs for either. Most flips are OPEN↔REFUTED. **Pinning protects reproducibility, not safety, on this bench.** |
+| Gate conformance vectors (`conformance/`) | 27 hand-computed cases all matched the reference implementation. Writing them found a **spec error**: GATE-SEMANTICS said an OPEN margin is always ≤ 0, but a COORDINATED gate short of `required` has a positive margin (0.14 in the vector). The spec was fixed. |
+| Bug found while productising grouping | In R4-B's experiment code, derived answers were keyed by question only, so if two groups mapped the same question the later one silently overwrote the earlier. `grouping.mjs` keys them by (group, question) and has a regression test. R4-B's saved groups map each question exactly once (checked), so its numbers stand; the script now keeps the first mapping instead of the last. |
+
 ## Backlog
 1. ~~Proof cache~~: done.
 2. ~~Compiled-first scheduler~~: done. Ship refute-only.
@@ -211,11 +224,14 @@ Full narrative, with alternatives and mistakes, in [JOURNAL.md](JOURNAL.md) §3.
 7. ~~Drift detector~~: done.
 8. ~~MiniMax agent~~: done.
 
-Next (round 5):
-- Make metamorphic validation the default acceptance test for compiled predicates; add a retry loop for Flash code generation, since only 40–60% of candidates compiled.
-- Production rollout of Choice-first grouping: run it automatically when a lattice has three or more Nouls touching the same field, guarded by the Noul validation.
-- Teacher error rates from calibration → automatic `tolerance` for cross-sense learning.
-- Curated tool profiles for agents (`profile: "gatekeeper"`, 6 tools) on both transports.
+Round 5: ~~metamorphic default + generation retries~~ (R5-A), ~~grouping rollout~~ (R5-B, module + auto-trigger), ~~automatic tolerance~~ (R5-C), ~~tool profiles~~ (R5-D), plus R5-E (model pinning).
+
+Next (round 6):
+- **Wrong NOs under drift (from R5-A).** Spot-check compiled NOs as well as YESes, and quarantine a predicate whose NO rate jumps against its history (a cheap drift signal that needs no teacher). Measure on the shifted stream.
+- **Grouping inside `jev gate`:** plan groups once per config change, store accepted mappings in the state, and ask Choices on later runs. Measure the cost per run and the stability of the derived verdicts across runs.
+- **Upgrade rehearsal:** a `jev gate --compare-model jev-1.14.0` mode that reports which verdicts would move before a pin changes (R5-E shows that a few percent do).
+- **Teacher audits in production:** sample decided gates for human review in the operator UI, feeding `teacherErrorRate`.
+- **Audit-log analytics:** the flip rate per gate over time from the Worker's audit table, as a fragility signal measured in the field.
 
 Earlier "next" items:
 

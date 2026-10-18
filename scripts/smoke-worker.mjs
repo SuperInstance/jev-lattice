@@ -156,9 +156,22 @@ else {
   const limited = statuses.filter(s => s === 429).length;
   console.log(`${limited ? "PASS" : "INFO"} rate limit: ${limited}/400 requests limited at 50/10s (permissive, eventually consistent)`);
 
+  // review fixes (docs/journal/r5-control-plane-review.*)
+  const wild = await (await fetch(`${base}/api/${lattice}/audit?node=${encodeURIComponent("%")}`, { headers: H })).json(); // root: the reader key may be rate-limited by now
+  check(wild.ok && wild.entries.length === 0, "audit: node filter is exact (a % is not a wildcard)");
+  const exact = await (await fetch(`${base}/api/${lattice}/audit?node=${id}`, { headers: H })).json();
+  check(exact.entries.length > 0 && exact.entries.every(e => e.changes.some(c => c.id === id)), "audit: node filter finds that node's changes", `${exact.entries.length} entries`);
+  const big = new ReadableStream({ start(c) { const chunk = new TextEncoder().encode(" ".repeat(1 << 20)); for (let i = 0; i < 5; i++) c.enqueue(chunk); c.close(); } });
+  const chunked = await fetch(`${base}/api/${lattice}/tool/jev_stats`, { method: "POST", headers: H, body: big, duplex: "half" }).catch(e => ({ status: `error ${e.message}` }));
+  check(chunked.status === 413, "a 5 MiB chunked body without content-length is refused (413)", `status ${chunked.status}`);
+  const fresh = await (await fetch(`${base}/api/never-used-${lattice}/audit`, { headers: H })).json();
+  check(fresh.ok && fresh.entries.length === 0, "audit on an unused lattice reads as empty");
+
   check((await admin("DELETE", `/${reader.id}`)).ok, "admin: revoke key");
   check((await fetch(`${base}/api/${lattice}/stats`, { headers: RH })).status === 401, "revoked key rejected");
   await admin("DELETE", `/${gk.id}`);
+  const events = await (await fetch(`${base}/admin/events?limit=10`, { headers: H })).json();
+  check(events.ok && events.events.some(e => e.action === "revoke" && e.key_id === reader.id) && events.events.some(e => e.action === "create" && e.key_id === gk.id), "admin: key create/revoke history recorded");
 }
 
 const idle = await (await fetch(`${base}/api/${lattice}/idle`, { method: "POST", headers: H })).json();

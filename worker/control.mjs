@@ -47,7 +47,11 @@ export function ensureSchema(db) {
   schemaReady ||= db.batch([
     db.prepare(`CREATE TABLE IF NOT EXISTS api_keys (
       id TEXT PRIMARY KEY, key_hash TEXT NOT NULL, tenant TEXT NOT NULL, scopes TEXT NOT NULL,
-      lattices TEXT NOT NULL, profile TEXT, label TEXT, created_at TEXT NOT NULL, revoked_at TEXT)`)
+      lattices TEXT NOT NULL, profile TEXT, label TEXT, created_at TEXT NOT NULL, revoked_at TEXT)`),
+    // append-only record of key management (who issued / revoked what, from where)
+    db.prepare(`CREATE TABLE IF NOT EXISTS key_events (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, action TEXT NOT NULL, key_id TEXT NOT NULL,
+      tenant TEXT, detail TEXT, ip TEXT)`)
   ]).catch(e => { schemaReady = null; throw e; });
   return schemaReady;
 }
@@ -58,20 +62,47 @@ export function ensureSchema(db) {
  */
 export async function authenticate(req, env) {
   const h = req.headers.get("authorization") || "";
+  if (h.length > 512) return { ok: false, status: 401, error: "invalid token" };
   const token = h.startsWith("Bearer ") ? h.slice(7).trim() : "";
   if (!token) return { ok: false, status: 401, error: "missing bearer token" };
-  if (env.JEV_API_KEY && constantTimeEqual(token, env.JEV_API_KEY)) {
-    return { ok: true, principal: { id: "root", tenant: "root", scopes: ["admin"], lattices: ["*"], profile: null, root: true } };
-  }
-  const m = token.match(/^jev_([a-z0-9]{12})_([A-Za-z0-9_-]{20,})$/);
+  // compare against root even when unset, so timing doesn't reveal whether a root key exists
+  const isRoot = constantTimeEqual(token, env.JEV_API_KEY || "\u0000no-root-key") && !!env.JEV_API_KEY;
+  if (isRoot) return { ok: true, principal: { id: "root", tenant: "root", scopes: ["admin"], lattices: ["*"], profile: null, root: true } };
+  const m = token.match(/^jev_([a-z0-9]{12})_([A-Za-z0-9_-]{20,128})$/);
   if (!m || !env.CONTROL) return { ok: false, status: 401, error: "invalid token" };
   await ensureSchema(env.CONTROL);
+  // hash before the lookup, so a known and an unknown key id take the same path
+  const hash = await sha256Hex(m[2]);
   const row = await env.CONTROL.prepare("SELECT * FROM api_keys WHERE id = ? AND revoked_at IS NULL").bind(m[1]).first();
-  if (!row || !constantTimeEqual(await sha256Hex(m[2]), row.key_hash)) return { ok: false, status: 401, error: "invalid token" };
-  return {
-    ok: true,
-    principal: { id: row.id, tenant: row.tenant, scopes: JSON.parse(row.scopes), lattices: JSON.parse(row.lattices), profile: row.profile || null, root: false }
-  };
+  if (!constantTimeEqual(hash, row?.key_hash || "0".repeat(64)) || !row) return { ok: false, status: 401, error: "invalid token" };
+  let scopes, lattices;
+  try {
+    scopes = JSON.parse(row.scopes);
+    lattices = JSON.parse(row.lattices);
+  } catch {
+    return { ok: false, status: 401, error: "invalid token" };
+  }
+  if (!Array.isArray(scopes) || !Array.isArray(lattices)) return { ok: false, status: 401, error: "invalid token" };
+  return { ok: true, principal: { id: row.id, tenant: row.tenant, scopes, lattices, profile: row.profile || null, root: false } };
+}
+
+/** Failed authentications are rate-limited per client IP (keys are limited per key id). */
+export async function limitFailedAuth(env, req) {
+  if (!env.RATE_LIMITER) return { ok: true };
+  const ip = req.headers.get("cf-connecting-ip") || "unknown";
+  const { success } = await env.RATE_LIMITER.limit({ key: `authfail:${ip}` });
+  return success ? { ok: true } : { ok: false, status: 429, error: "too many failed authentications" };
+}
+
+async function keyEvent(env, action, keyId, tenant, detail, ip) {
+  await env.CONTROL.prepare("INSERT INTO key_events (at, action, key_id, tenant, detail, ip) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(new Date().toISOString(), action, keyId, tenant ?? null, detail ? JSON.stringify(detail) : null, ip ?? null).run();
+}
+
+export async function listKeyEvents(env, limit = 100) {
+  await ensureSchema(env.CONTROL);
+  const { results } = await env.CONTROL.prepare("SELECT * FROM key_events ORDER BY seq DESC LIMIT ?").bind(Math.min(Math.max(1, limit), 1000)).all();
+  return { ok: true, events: results.map(e => ({ ...e, detail: e.detail ? JSON.parse(e.detail) : null })) };
 }
 
 const randomString = (n, alphabet) => {
@@ -79,16 +110,18 @@ const randomString = (n, alphabet) => {
   return [...bytes].map(b => alphabet[b % alphabet.length]).join("");
 };
 
-export async function createKey(env, { tenant, scopes = ["read"], lattices, profile = null, label = null }) {
+export async function createKey(env, { tenant, scopes = ["read"], lattices, profile = null, label = null } = {}, { ip = null } = {}) {
   if (!tenant || !/^[a-z0-9-]{1,40}$/.test(tenant)) return { ok: false, error: "tenant: lowercase letters, digits, dashes (≤ 40)" };
   if (!Array.isArray(scopes) || !scopes.length || !scopes.every(s => SCOPES.includes(s))) return { ok: false, error: `scopes: subset of ${SCOPES.join(", ")}` };
   const pats = Array.isArray(lattices) && lattices.length ? lattices.map(String) : [`${tenant}-*`];
   if (!pats.every(p => /^[a-zA-Z0-9_*-]{1,64}$/.test(p))) return { ok: false, error: "lattices: name patterns like acme-* or shared" };
+  if (profile !== null && !PROFILES[profile]) return { ok: false, error: `profile: null or one of ${Object.keys(PROFILES).join(", ")}` };
   await ensureSchema(env.CONTROL);
   const id = randomString(12, "abcdefghijklmnopqrstuvwxyz0123456789");
   const secret = randomString(40, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789");
   await env.CONTROL.prepare("INSERT INTO api_keys (id, key_hash, tenant, scopes, lattices, profile, label, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(id, await sha256Hex(secret), tenant, JSON.stringify(scopes), JSON.stringify(pats), profile, label, new Date().toISOString()).run();
+  await keyEvent(env, "create", id, tenant, { scopes, lattices: pats, profile, label }, ip);
   return { ok: true, id, key: `jev_${id}_${secret}`, tenant, scopes, lattices: pats, profile, note: "store this key now; only its hash is kept" };
 }
 
@@ -98,10 +131,12 @@ export async function listKeys(env) {
   return { ok: true, keys: results.map(r => ({ ...r, scopes: JSON.parse(r.scopes), lattices: JSON.parse(r.lattices) })) };
 }
 
-export async function revokeKey(env, id) {
+export async function revokeKey(env, id, { ip = null } = {}) {
   await ensureSchema(env.CONTROL);
   const r = await env.CONTROL.prepare("UPDATE api_keys SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(new Date().toISOString(), id).run();
-  return { ok: (r.meta?.changes || 0) > 0, revoked: id };
+  const ok = (r.meta?.changes || 0) > 0;
+  if (ok) await keyEvent(env, "revoke", id, null, null, ip);
+  return { ok, revoked: id };
 }
 
 /** Per-key rate limit (Workers rate-limiting binding; absent binding → unlimited). */

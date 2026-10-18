@@ -48,3 +48,18 @@ test("tolerance treats a small share of GO-side 'no' labels as teacher noise", (
   assert.equal(learnThreshold(s, { minSamples: 5 }).t, null, "strict: the single flipped label blocks every bar ≤ 0.97");
   assert.equal(learnThreshold(s, { minSamples: 5, tolerance: 0.03 }).t, 0.5);
 });
+
+test("allowedDisagreements / teacherErrorRate / learnThreshold with a teacher error rate", async () => {
+  const { allowedDisagreements, teacherErrorRate, learnThreshold } = await import("../senses.mjs");
+  assert.equal(allowedDisagreements(100, 0), 0);
+  assert.equal(allowedDisagreements(10, 0.02), 1, "P(Bin(10,.02) > 0) ≈ 0.18 > 0.05, P(>1) ≈ 0.016");
+  assert.ok(allowedDisagreements(200, 0.05) >= 14 && allowedDisagreements(200, 0.05) <= 16);
+  const r = teacherErrorRate([[true, true], [false, true], [true, true], [null, false]]);
+  assert.equal(r.n, 3); assert.equal(r.errors, 1);
+  assert.equal(teacherErrorRate([[true, true]]).rate, 0);
+  // 40 student GOs at p≥0.9, one teacher "no" among them (noise): strict blocks, ε=2% forgives
+  const samples = [...Array.from({ length: 39 }, () => [0.95, true]), [0.95, false], ...Array.from({ length: 20 }, () => [0.2, false])];
+  assert.ok(learnThreshold(samples).t === null || learnThreshold(samples).t > 0.95);
+  assert.equal(learnThreshold(samples, { teacherErrorRate: 0.02 }).t, 0.5);
+  assert.equal(learnThreshold(samples, { teacherErrorRate: 0 }).t, learnThreshold(samples).t, "ε = 0 is the strict policy");
+});

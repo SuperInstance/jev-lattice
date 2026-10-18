@@ -54,7 +54,7 @@ Given a node *n*, its spec *s*, and an evaluation time `now` (default: the curre
 8. **Margin.**
    - If `satisfied`: rank the supporting paths by `confidence − bar` in descending order. The *decider* is the `required`-th of them, the weakest path still needed. `margin = decider.confidence − bar(decider)`.
    - Else, if there are refuting paths: the decider is the refuting path with the largest `(1 − bar) − confidence`, and `margin` is that value.
-   - Else (OPEN): `margin = max over paths of max(confidence − bar, (1 − bar) − confidence)`. This is ≤ 0 and measures how far the gate is from any decision; it is `null` when there are no paths.
+   - Else (OPEN): `margin = max over paths of max(confidence − bar, (1 − bar) − confidence)`. For a BINARY gate this is ≤ 0: how far the gate is from any decision. A COORDINATED gate short of `required` paths can have a positive margin (its paths are decided, there are just too few of them). It is `null` when there are no paths.
    - Round to 4 decimals.
 9. **Fragile.** `fragile = decider exists ∧ margin < max(s.fragility_band, decider.evidence.spread ?? 0)`. OPEN gates are never fragile.
 10. **Require firm (opt-in).** If `s.require_firm ∧ fragile ∧ verdict ≠ CONFLICT`, the verdict needs corroboration. A GO needs `|supporting| > required`; a REFUTED needs more than one refuting path. Without corroboration, return `verdict: "OPEN"`, `go: false`, `needs_corroboration: true`, and `held` = the verdict that would otherwise have been returned. *Measured caveat:* this lowered reproducibility in practice (tile T38), so it is off by default.
@@ -95,3 +95,5 @@ Measured on Jev, re-ask flips concentrate within 0.02 of the bar: a 50% flip rat
 - [ ] CONFLICT blocks GO unless `block_on_conflict: false`
 - [ ] COORDINATED margin uses the `required`-th best supporting path
 - [ ] fragile uses `max(band, decider.evidence.spread)`
+
+Machine-readable cases: [`conformance/gate-vectors.json`](../conformance/gate-vectors.json) (27 vectors, expectations computed by hand from this document). Build one QUESTION node per vector, evaluate at the file's `now`, and compare the listed fields. `tests/conformance.test.mjs` is the reference runner.

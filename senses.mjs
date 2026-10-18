@@ -38,14 +38,49 @@ export function createLabelBank(store) {
  * Smallest threshold t (integer grid, P4) at which the sense never said GO
  * against a teacher NO, with at least `minGo` GOs supporting it. null = no safe t.
  */
-export function learnThreshold(samples, { minSamples = 8, minGo = 3, floor = null, minGoForDiscount = 0, tolerance = 0 } = {}) {
+/**
+ * How many teacher "no"s among m GO-side samples are explainable by teacher noise alone:
+ * the smallest k with P(Binomial(m, ε) > k) ≤ alpha. ε = 0 → 0 (fail-safe).
+ */
+export function allowedDisagreements(m, eps, alpha = 0.05) {
+  if (!(eps > 0) || m <= 0) return 0;
+  let pk = (1 - eps) ** m, cdf = pk;
+  for (let k = 0; k < m; k++) {
+    if (1 - cdf <= alpha) return k;
+    pk *= ((m - k) / (k + 1)) * (eps / (1 - eps));
+    cdf += pk;
+  }
+  return m;
+}
+
+/**
+ * Teacher error rate from an audit: pairs of [teacherLabel, goldLabel] (e.g. calibration rows
+ * with code truth, or a hand-checked sample). → { rate, n, errors, upper95 }
+ */
+export function teacherErrorRate(pairs) {
+  const used = pairs.filter(([t, g]) => t !== null && t !== undefined && g !== null && g !== undefined);
+  const n = used.length, errors = used.filter(([t, g]) => !!t !== !!g).length;
+  if (!n) return { rate: null, n: 0, errors: 0, upper95: null };
+  // Wilson upper bound; with 0 errors it is ≈ 3/n (rule of three)
+  const z = 1.96, ph = errors / n;
+  const upper = (ph + z * z / (2 * n) + z * Math.sqrt(ph * (1 - ph) / n + z * z / (4 * n * n))) / (1 + z * z / n);
+  return { rate: +(errors / n).toFixed(4), n, errors, upper95: +upper.toFixed(4) };
+}
+
+/**
+ * Lowest bar t ∈ {0.50, 0.51, …, 1.00} at which the student's GOs agree with the teacher.
+ * tolerance: fixed fraction of GO-side teacher "no"s to forgive (default 0 = fail-safe).
+ * teacherErrorRate: forgive what a teacher with that flip rate would plausibly produce
+ *   (allowedDisagreements(m, ε, alpha)); overrides `tolerance` when given.
+ */
+export function learnThreshold(samples, { minSamples = 8, minGo = 3, floor = null, minGoForDiscount = 0, tolerance = 0, teacherErrorRate: eps = null, alpha = 0.05 } = {}) {
   if (samples.length < minSamples) return { t: null, reason: "too few samples" };
   for (let i = 50; i <= 100; i++) {
     let t = i / 100;
     const go = samples.filter(([p]) => p >= t);
-    // tolerance: fraction of GO-side teacher "no" labels to treat as teacher noise (default 0 = fail-safe)
     const disagree = go.filter(([, y]) => !y).length;
-    if (disagree > Math.floor(tolerance * go.length)) continue;
+    const allowed = eps !== null ? allowedDisagreements(go.length, eps, alpha) : Math.floor(tolerance * go.length);
+    if (disagree > allowed) continue;
     if (go.length < minGo) return { t: null, reason: "no safe threshold with enough GOs" };
     // Earned discount: zero errors in a small bank is not proof of safety (rule of three:
     // n clean GOs bound the error rate at ~3/n). Below `floor` only with enough evidence.
@@ -101,7 +136,7 @@ export async function teach(lattice, { ids, files, senses, bank, rules = null })
 }
 
 /** Per question × sense: stats + learned threshold, straight from the bank. */
-export async function senseReport(lattice, { ids, senseNames, bank, minSamples, minGo, floor, minGoForDiscount }) {
+export async function senseReport(lattice, { ids, senseNames, bank, minSamples, minGo, floor, minGoForDiscount, tolerance, teacherErrorRate: eps = null }) {
   const rows = [];
   for (const id of ids) {
     const n = lattice.getNode(id);
@@ -109,7 +144,7 @@ export async function senseReport(lattice, { ids, senseNames, bank, minSamples, 
     for (const s of senseNames) {
       const entry = await bank.get(n.text, s);
       const samples = entry?.samples || [];
-      rows.push({ id, question: n.text, sense: s, ...senseStats(samples), learned: learnThreshold(samples, { minSamples, minGo, floor, minGoForDiscount }) });
+      rows.push({ id, question: n.text, sense: s, ...senseStats(samples), learned: learnThreshold(samples, { minSamples, minGo, floor, minGoForDiscount, tolerance, teacherErrorRate: eps }) });
     }
   }
   return { ok: true, rows };
@@ -181,7 +216,7 @@ export function createSenseSuite({ jev = null, mm = null, small = null, predicat
     bank,
     /** Bank (p, teacher label) for every decided question. */
     teach: (lattice, { ids, files, senses: names, rules: r }) => teach(lattice, { ids: questionIds(lattice, ids), files, rules: r, senses: pick(names), bank }),
-    report: (lattice, { ids, minSamples, minGo, floor, minGoForDiscount } = {}) => senseReport(lattice, { ids: questionIds(lattice, ids), senseNames: Object.keys(senses), bank, minSamples, minGo, floor, minGoForDiscount }),
+    report: (lattice, { ids, minSamples, minGo, floor, minGoForDiscount, tolerance, teacherErrorRate } = {}) => senseReport(lattice, { ids: questionIds(lattice, ids), senseNames: Object.keys(senses), bank, minSamples, minGo, floor, minGoForDiscount, tolerance, teacherErrorRate }),
     /** Run senses without a teacher; optionally append SENSE:<name> proofs. */
     async probe(lattice, { ids, files, senses: names, addProofs = false, rules: r }) {
       const nodes = questionIds(lattice, ids).map(id => lattice.getNode(id)).filter(Boolean);
@@ -203,8 +238,8 @@ export function createSenseSuite({ jev = null, mm = null, small = null, predicat
      * Write what the bank learned into each question's spec: a learned bar per
      * sense (source_thresholds["SENSE:x"]), or block the sense where none is safe.
      */
-    async apply(lattice, { ids, minSamples, minGo, floor, minGoForDiscount } = {}) {
-      const rep = await senseReport(lattice, { ids: questionIds(lattice, ids), senseNames: Object.keys(senses), bank, minSamples, minGo, floor, minGoForDiscount });
+    async apply(lattice, { ids, minSamples, minGo, floor, minGoForDiscount, tolerance, teacherErrorRate } = {}) {
+      const rep = await senseReport(lattice, { ids: questionIds(lattice, ids), senseNames: Object.keys(senses), bank, minSamples, minGo, floor, minGoForDiscount, tolerance, teacherErrorRate });
       const applied = [];
       for (const row of rep.rows) {
         const n = lattice.getNode(row.id);

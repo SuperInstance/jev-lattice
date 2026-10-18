@@ -268,3 +268,71 @@ MiniMax's grouping came out sensible on the first try, including "not set" optio
 The edge tier is technically ready but needs tenancy, quotas and an audit log before anyone outside the team uses it (PRODUCTION.md §4).
 
 > **P23. A production plan starts with measurements of the current system, not a feature list.** Three of the top-priority items came from measurements, not from reading the code.
+
+---
+
+## Round 5 (v0.7): P0 production work + experiments
+
+### 5.0 Planning
+**Inputs:** the six P0 items in PRODUCTION.md §4 and the four round-5 research items, plus one added experiment: a model-upgrade comparison (R5-E), so that the case for pinning would rest on a measurement and not an argument.
+
+**Ordering.** P0 first, because it changes the deployed system and every later smoke test depends on it. Live experiments were started in the background as soon as their library code existed: R5-E right after the pinning change, R5-A as soon as metamorphic acceptance was in `compiled.mjs`, R5-B once `grouping.mjs` had tests. Offline work (R5-C, types, conformance, docs) filled the waits.
+
+### 5.1 The control plane: one decision per layer
+- **Where authorisation lives.** The obvious place was the Worker, but the tool list, quotas and the audit diff all need lattice state, which lives in the Durable Object. The split chosen: the Worker authenticates, checks lattice access and rate-limits; the DO gets a `principal` and builds a per-request `ctx` (`allow`, `guard`, `profile`) that `mcp-core` enforces.
+- **Why `mcp-core` grew `ctx`** instead of the DO wrapping it: the same hooks now serve the stdio server (`JEV_PROFILE`) and any other host. Refusals come back as MCP results with `isError` and a `forbidden:` / `quota:` reason, never as protocol errors, because agents can read and react to a result but often just retry a protocol error.
+- **Scopes by consequence, not by verb.** `read ⊂ verify ⊂ admin` are defined by what a call can change: nothing; add evidence; replace the lattice or its policy. Unknown tools default to `verify`, not `read`, so a new tool can never quietly be readable-and-mutating.
+- **Audit the decision, not the request.** Each mutating call snapshots every question's verdict before and after, and records only the changes, with the proofs that caused them. That costs O(questions) gate evaluations per call, which is affordable under the 5000-node quota, and it answers the operator's real question: *who moved this gate?*
+- **Providers per lattice.** The default sends evidence only to TypeSafe. That changed the smoke test, which now has to opt a lattice in to MiniMax, Workers AI and predicates. That is the intended friction.
+
+**A measurement that changed the config:** the rate limiter with a 60 s period limited 0 of 600 rapid requests; with a 10 s period it limited 37 of 300. Cloudflare documents the binding as permissive and eventually consistent. We kept 50/10 s and documented it as abuse protection, not billing.
+
+### 5.2 Delegating the security review to MiniMax-M3, and why it worked this time
+Round 1's MiniMax code review was mostly wrong (1.5 of 7 findings real). This round's prompt ([prompt](journal/r5-control-plane-review.prompt.md), [output](journal/r5-control-plane-review.minimax-m3.md)) was different in three ways:
+1. It stated a **threat model** (what a tenant must not be able to do).
+2. It required **a concrete request sequence** for each finding.
+3. It asked the model to **say when it was unsure**.
+
+Result: 10 findings, **8 real, 1 partly real, 1 false**, and the false one (#7, the `importState` shape) was the one MiniMax had itself marked "not sure".
+
+| # | finding | verdict | action |
+|---|---|---|---|
+| 2 | body-size limit bypassed by a chunked upload with no `content-length` | **real, the most important** | the body is read through a byte-capped reader; smoke: a 5 MiB chunked body → 413 |
+| 1 | failed auth is never rate-limited; unbounded secret length | real | secret ≤ 128 chars, header ≤ 512; failed auths limited per IP |
+| 3 | audit `node` filter used `LIKE`, so `%` matched everything | real (low; no cross-tenant data) | exact match through `json_each`; smoke: `?node=%` → 0 rows |
+| 4 | the idle cycle triggered via REST was attributed to `system:idle` | real | the caller's id is recorded |
+| 5, 6 | timing differences: unknown vs known key id; root configured or not | real, negligible | hash before the lookup; always compare against root |
+| 8 | a corrupted key row → 500 for every request with that key | real (robustness) | parse errors fail closed (401) |
+| 9 | no record of key management | real (defence in depth) | an append-only `key_events` table, `GET /admin/events` |
+| 10 | probing lattices creates Durable Objects | partly real: probing needs a `*` key, but a *read* of an unused lattice wrote storage (the audit table) | the audit table is created on first write |
+| 7 | the import quota is bypassed by a non-array `nodes` | **false**: `importState` rejects it untouched | none |
+
+> **P24. A reviewer model's precision is a function of the prompt's falsifiability.** Asking for an exploit sequence per finding, against a stated threat model, and an explicit "not sure", turned MiniMax from a noisy reviewer (21% real) into a useful one (85% real). Its uncertainty label was calibrated: the one finding it flagged was the one that was wrong.
+
+### 5.3 API freeze: writing the spec as data found a spec bug
+Conformance vectors were written **by hand** from GATE-SEMANTICS.md, not generated from the implementation (otherwise they would only test the code against itself). All 27 matched. While computing one expectation by hand I hit the spec's claim that an OPEN margin is ≤ 0. For a COORDINATED gate with one strong path and two required, the margin is +0.14. The code was right and the document wrong; that is now fixed, and the case is a vector.
+
+Hand-written TypeScript declarations can drift silently, so a test imports each module and checks that every value a `.d.ts` exports really exists. `tsc` checks a usage file that imports through the package's own `exports`.
+
+> **P25. Turn prose specs into executable data, and write the expectations by hand.** Generating expected values from the implementation tests nothing; computing them from the spec tests the spec too.
+
+### 5.4 R5-E: measure the case for pinning
+**Design:** run three passes: the old model twice (that is the noise floor) and the new model once. An upgrade "flip" only means something compared with the re-ask flip rate. **Result:** the upgrade moves 2–2.5× more verdicts than re-asking, and moves p about 3× more, with unchanged accuracy. So pinning is about **reproducibility and auditability**: a verdict that changes with no change in the evidence is exactly what the new audit log would flag as unexplained.
+
+### 5.5 R5-A: what the retry loop fixed and what it exposed
+Extracting code from fences and bare arrows, plus regenerating unusable output, took usable candidates from 60% to 85–90%. Metamorphic acceptance again gave 0 wrong GOs. But looking at **both** error directions, which R4-D's summary had underplayed, showed that every arm produced 15–45 wrong NOs after the format shift. Meaning-preserving rewrites of the *training* distribution don't anticipate a new format. Under refute-only trust a wrong NO is a wrong REFUTED. That is safe (fails closed) but a liveness failure, and it sets round 6's first item: spot-check NOs, and use a jump in the NO rate as a teacher-free drift signal.
+
+> **P26. Report both error directions in every table, even when only one is "the safety metric".** The direction you aren't optimising is where the next failure is hiding.
+
+### 5.6 R5-B: productising found a latent bug in the experiment
+Moving the grouping logic from an experiment into `grouping.mjs` meant writing a unit test with two groups mapping the same question. It failed: derived answers were keyed by question only, so the later group silently overwrote the earlier one. R4-B's own data mapped each question once (checked), so its numbers stand. The test exists because a library must handle inputs that an experiment happens not to produce. On generalisation, the most informative result was an **abstention**: for three redis questions on three different settings, MiniMax proposed no groups at all, which the prompt explicitly allowed ("it is fine to return no groups").
+
+> **P27. Give the proposer an explicit way to say "nothing here".** A proposal step that must always return something will invent groupings; with the option to abstain, MiniMax grouped only same-field questions.
+
+### 5.7 R5-C: an allowance that scales with evidence
+R4-C's fixed `tolerance` was a fraction, which is wrong at both ends: `floor(3% × 20) = 0` forgives nothing on small banks, and 3% of 400 forgives too much. The binomial allowance asks how many "no"s a teacher with flip rate ε would produce among m samples, at 95%. It beat every fixed tolerance up to 5% noise with 0 wrong GOs. Two limits were found and kept in the docs: above ~10% noise it forgives the student's own errors, and the audit's *upper* bound is too loose (it produced wrong GOs with a perfect teacher). The point estimate from a 30-label audit was close to the true ε.
+
+### 5.8 Round 5 process lessons
+- P24 falsifiable review prompts · P25 hand-computed executable specs · P26 report both error directions · P27 let proposers abstain.
+- **Unit-testing code lifted out of an experiment** found a bug the experiment couldn't (5.6). Productising is itself a test.
+- **Every P0 change came with a live smoke check** (49 checks now). Writing a check first is how the rate-limiter period problem surfaced.

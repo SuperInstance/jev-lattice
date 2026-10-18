@@ -50,11 +50,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: SuperInstance/jev-lattice@v0.6      # pin a tag or a commit SHA
+      - uses: SuperInstance/jev-lattice@v0.7      # pin a tag or a commit SHA
         with:
           config: jev.gates.json
           typesafe-token: ${{ secrets.TYPESAFE_AI_TOKEN }}
+          model: jev-1.13.0                        # the default; change it deliberately
 ```
+**Pin the verifier model.** Moving from `jev-1.13.0` to `jev-1.14.0` changed 4.7–6.2% of verdicts on our bench, 2–2.5× the rate of simply re-asking (`experiments/model-upgrade.mjs`). Accuracy didn't change, but a verdict that moves without a code change is noise in a pipeline. The proof cache keys on the model, so after an upgrade every gate is re-verified once. Locally, set `JEV_MODEL`.
+
 The Action restores and saves the state through `actions/cache`, writes a Markdown table to the job summary, fails the job when any gate isn't GO, and exposes `outputs.pass`.
 
 ## 4. Reading the output
