@@ -2,6 +2,11 @@
 
 All notable changes. Versions follow semver once v1.0 is reached; before that, minor versions may change APIs. The state schema stays importable forward.
 
+## 0.9.1
+### Fixed
+- GitHub Action: the Evaluate step now exits with the verifier's status, and the gate keys on the step outcome. Before, `set +e` made the step exit 0 on REFUTED, and a skipped step's missing outputs (null, which coerces to 0) let a gate that never ran pass (#4).
+- `package.json`: `bin` paths normalised (`npm pkg fix`), which silences the publish warning.
+
 ## 0.9.0
 ### Added
 - Worker: daily backups of every lattice to R2 (cron), with 30-day retention; `POST /admin/backup`, `GET /admin/backups/:name`, `POST /admin/restore/:name` (audited); a lattice registry (`GET /admin/lattices`).
