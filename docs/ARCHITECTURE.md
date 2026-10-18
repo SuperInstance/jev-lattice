@@ -6,12 +6,19 @@
 Host agent (Claude Code, Cursor, OpenClaw, custom)
         │  MCP (tools/call)
         ▼
-mcp-server.mjs          ← thin adapter, persists jev-state.json
+mcp-server.mjs | worker/ ← transports (stdio file-backed | HTTP + Durable Object)
         │
-harness.mjs             ← capacity probe → policy tier
+mcp-core.mjs            ← tool defs + JSON-RPC dispatch (runtime-agnostic)
+        │
+orchestrator.mjs        ← providers → proofs: verify, fan-out, decompose, roll-up, compile
+   │        providers/  ← jev (TypeSafe), minimax, workers-ai
+        │
+harness.mjs             ← capacity probe → policy tier (Node only)
         │
 jev-core.js             ← question graph, proofs, go/no-go, query, consolidate
 ```
+
+Providers never decide; they append proofs. The gate in `jev-core.js` is the only place where GO is computed.
 
 - **MCP** owns the wire contract only.  
 - **Harness** owns intensity (when to consolidate, soft limits, preferred proof sources).  
@@ -30,7 +37,11 @@ One proof with `confidence ≥ threshold` → GO.
 
 ### COORDINATED
 
-At least `required_independent_proofs` proofs each with `confidence ≥ threshold` → GO.
+At least `required_independent_proofs` **independent** proofs, each with `confidence ≥ threshold`, → GO. Proofs that share an independence key (`independence_key`, otherwise `source_type:provider`, otherwise `source_type`) count once.
+
+### Verdicts
+
+`GO`, `OPEN`, `REFUTED` (a live path has confidence ≤ 1 − threshold), `CONFLICT` (both; blocks GO unless `block_on_conflict: false`). Invalidated proofs, proofs older than `max_proof_age_ms`, and sources outside `allowed_sources` are ignored.
 
 ### Multi-proof salience
 
@@ -79,4 +90,4 @@ Export state → move to a larger or smaller shell → import. Soft tissue survi
 
 - Not a full agent loop (host owns the loop).  
 - Not a vector DB replacement (spatial coords are light; swap `embed()` later).  
-- Not cloud-dependent.
+- Not cloud-dependent: core, browser and stdio MCP run offline. Cloudflare and the providers are optional layers.

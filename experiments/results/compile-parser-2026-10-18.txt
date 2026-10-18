@@ -1,0 +1,22 @@
+compiled 10 questions in 71625 ms (MiniMax 12 calls, Jev 20 calls)
+
+accepted  tries  conf  trainΔ  testAcc  µs/call  question
+true      1      14    0       1.000     185.7  Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?
+true      1      20    0       1.000     231.7  Is TLS enabled (a tls-port is configured)?
+true      2      20    0       1.000     239.8  Is AOF persistence enabled (appendonly yes in effect)?
+true      1      13    0       1.000     319.8  Is a memory limit (maxmemory) configured?
+true      1      13    0       1.000     223.3  Is the memory limit at least 1 GB?
+true      1      12    0       1.000     239.7  Does the eviction policy evict keys when memory is full (anything but noeviction)?
+true      1      20    0       1.000     267.5  Is password authentication (requirepass) configured?
+true      1      18    0       1.000     193.2  Is Redis bound only to the loopback interface?
+true      1      16    0       1.000     233.0  Is Redis listening on all interfaces (bind 0.0.0.0)?
+false     2      9     0         -           -  Is the effective plaintext port 6379?
+  REFUTED  (truth no )  Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?
+  REFUTED  (truth no )  Is TLS enabled (a tls-port is configured)?
+  REFUTED  (truth no )  Is AOF persistence enabled (appendonly yes in effect)?
+  GO       (truth yes)  Is a memory limit (maxmemory) configured?
+  GO       (truth yes)  Is the memory limit at least 1 GB?
+  REFUTED  (truth no )  Does the eviction policy evict keys when memory is full (anything but noeviction)?
+  REFUTED  (truth no )  Is password authentication (requirepass) configured?
+  REFUTED  (truth no )  Is Redis bound only to the loopback interface?
+  REFUTED  (truth no )  Is Redis listening on all interfaces (bind 0.0.0.0)?

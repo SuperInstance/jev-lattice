@@ -1,6 +1,6 @@
 /**
  * JEV Lattice Core — browser-native spatial memory + question-graph substrate
- * Schema: jev-lattice/v0.2
+ * Schema: jev-lattice/v0.3 (reads v0.2)
  *
  * Design goals:
  * - Tiny, deterministic enough to reason about
@@ -12,7 +12,7 @@
  * Backward compatible: nodes without question_spec behave as free-form observations.
  */
 
-const SCHEMA = "jev-lattice/v0.2";
+const SCHEMA = "jev-lattice/v0.3";
 const DEFAULT_DIM = 2;
 
 function uid(prefix = "n") {
@@ -21,6 +21,17 @@ function uid(prefix = "n") {
 
 function clamp(v, lo, hi) {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** Finite number or fallback — unlike `Number(x) || d`, keeps a legitimate 0. */
+function num(v, fallback) {
+  if (v === null || v === undefined || v === "" || typeof v === "boolean") return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function deepClone(v) {
+  return v === undefined ? v : JSON.parse(JSON.stringify(v));
 }
 
 function hashText(text) {
@@ -139,7 +150,11 @@ export class JEVLattice {
       created_at: new Date().toISOString(),
       hierarchical_links: { parent_node: null, child_nodes: [] },
       // Optional question-graph fields (null = legacy / observation)
-      question_spec: question_spec ? normalizeQuestionSpec(question_spec) : null,
+      // QUESTION without a spec still gets a gate (BINARY default) — never an implicit GO
+      question_spec:
+        question_spec || node_type === "QUESTION"
+          ? normalizeQuestionSpec(question_spec || {})
+          : null,
       active_proofs: proofs
     };
 
@@ -201,11 +216,30 @@ export class JEVLattice {
   addProof(nodeId, proof) {
     const n = this.nodes.get(nodeId);
     if (!n) return { ok: false, error: "node not found" };
+    if (!proof || typeof proof !== "object") return { ok: false, error: "proof object required" };
     if (!n.active_proofs) n.active_proofs = [];
-    n.active_proofs.push(normalizeProof(proof));
+    const normalized = normalizeProof(proof);
+    n.active_proofs.push(normalized);
     this._recomputeNodeMetrics(n);
     this._touch();
-    return { ok: true, node: n, proofCount: n.active_proofs.length };
+    return { ok: true, node: n, proof: normalized, proofCount: n.active_proofs.length };
+  }
+
+  /**
+   * Invalidate one verification path (e.g. the config it parsed changed).
+   * The proof stays for audit but no longer counts toward any gate.
+   */
+  invalidateProof(nodeId, proofId, reason = null) {
+    const n = this.nodes.get(nodeId);
+    if (!n) return { ok: false, error: "node not found" };
+    const p = (n.active_proofs || []).find(x => x.proof_id === proofId);
+    if (!p) return { ok: false, error: "proof not found" };
+    p.invalidated = true;
+    p.invalidated_reason = reason;
+    p.invalidated_at = new Date().toISOString();
+    this._recomputeNodeMetrics(n, { reset: true });
+    this._touch();
+    return { ok: true, node: n, gate: this.evaluateGoNoGo(nodeId) };
   }
 
   /**
@@ -213,63 +247,88 @@ export class JEVLattice {
    * BINARY: best proof confidence ≥ threshold (or any proof ≥ threshold)
    * COORDINATED: count of independent proofs ≥ threshold ≥ required_k
    */
-  evaluateGoNoGo(nodeId) {
+  evaluateGoNoGo(nodeId, { now = Date.now() } = {}) {
     const n = this.nodes.get(nodeId);
     if (!n) return { ok: false, error: "node not found", go: false };
 
-    // Non-question nodes: treat as open observations (not a gate)
-    if (n.node_type !== "QUESTION" || !n.question_spec) {
+    // Observations are not gates
+    if (n.node_type !== "QUESTION") {
       return {
         ok: true,
         go: true,
+        gated: false,
         reason: "not a gated question node",
         node_type: n.node_type || "OBSERVATION"
       };
     }
 
-    const spec = n.question_spec;
-    const mode = (spec.evaluation_mode || "BINARY").toUpperCase();
-    const threshold = clamp(Number(spec.confidence_threshold) || 0.85, 0, 1);
-    const required = Math.max(1, Number(spec.required_independent_proofs) || 1);
-    const proofs = n.active_proofs || [];
+    const spec = n.question_spec || normalizeQuestionSpec({});
+    const mode = spec.evaluation_mode;
+    const threshold = spec.confidence_threshold;
+    const required = mode === "BINARY" ? 1 : spec.required_independent_proofs;
+    const live = liveProofs(n.active_proofs, spec, now);
 
-    const valid = proofs.filter(p => (Number(p.confidence) || 0) >= threshold);
-
-    if (mode === "BINARY") {
-      const go = valid.length >= 1;
-      return {
-        ok: true,
-        go,
-        mode: "BINARY",
-        validProofs: valid.length,
-        required: 1,
-        threshold,
-        bestConfidence: proofs.reduce((m, p) => Math.max(m, Number(p.confidence) || 0), 0),
-        reason: go ? "binary proof satisfied" : "no proof meets threshold",
-        open: !go
-      };
+    // Independence: proofs sharing an independence key count once (best confidence wins)
+    const byKey = new Map();
+    for (const p of live) {
+      if (p.confidence < threshold) continue;
+      const k = independenceKey(p);
+      if (!byKey.has(k) || byKey.get(k).confidence < p.confidence) byKey.set(k, p);
     }
-
-    // COORDINATED
-    const go = valid.length >= required;
-    return {
+    const valid = [...byKey.values()];
+    // Refutation: a live path confidently says "no" (confidence ≤ 1 − threshold)
+    const refuting = new Set(
+      live.filter(p => p.confidence <= 1 - threshold).map(independenceKey)
+    );
+    const satisfied = valid.length >= required;
+    const conflict = satisfied && refuting.size > 0;
+    const go = satisfied && !(conflict && spec.block_on_conflict);
+    const verdict = conflict ? "CONFLICT" : satisfied ? "GO" : refuting.size ? "REFUTED" : "OPEN";
+    const base = {
       ok: true,
       go,
-      mode: "COORDINATED",
+      gated: true,
+      open: !go,
+      verdict,
+      refutingProofs: refuting.size,
+      mode,
       validProofs: valid.length,
       required,
       threshold,
+      liveProofs: live.length,
+      ignoredProofs: (n.active_proofs || []).length - live.length,
+      bestConfidence: live.reduce((m, p) => Math.max(m, p.confidence), 0),
       proofSources: valid.map(p => p.source_type),
-      multiProofSalience: multiProofSalience(proofs),
+      multiProofSalience: multiProofSalience(live)
+    };
+    if (conflict) {
+      return {
+        ...base,
+        reason: `${valid.length} supporting vs ${refuting.size} refuting path(s)` +
+          (go ? " — conflict allowed by spec" : " — conflict blocks GO")
+      };
+    }
+    if (mode === "BINARY") {
+      return {
+        ...base,
+        reason: go ? "binary proof satisfied" : refuting.size ? "refuted by proof" : "no proof meets threshold"
+      };
+    }
+    return {
+      ...base,
       reason: go
         ? `${valid.length}/${required} independent proofs satisfied`
-        : `need ${required - valid.length} more independent proof(s) ≥ ${threshold}`,
-      open: !go
+        : refuting.size
+          ? `refuted by ${refuting.size} path(s); ${valid.length}/${required} supporting`
+          : `need ${required - valid.length} more independent proof(s) ≥ ${threshold}`
     };
   }
 
   // ---------- spatial + probabilistic query ----------
   query({ text, tags = [], topK = 4, beam = 3 } = {}) {
+    tags = Array.isArray(tags) ? tags.map(String) : [];
+    topK = Math.max(1, Math.floor(num(topK, 4)));
+    beam = Math.max(1, Math.floor(num(beam, 3)));
     if (this.nodes.size === 0) {
       return { ok: true, path: [], context: [], latencyHint: 0 };
     }
@@ -389,9 +448,15 @@ export class JEVLattice {
           keep.tags = Array.from(new Set([...keep.tags, ...drop.tags]));
           keep.salience_score = clamp(keep.salience_score + 0.05, 0, 1);
           keep.epistemic_uncertainty = Math.min(keep.epistemic_uncertainty, drop.epistemic_uncertainty);
+          keep.access_frequency = (keep.access_frequency || 0) + (drop.access_frequency || 0);
+          keep.transition_probabilities = [
+            ...(keep.transition_probabilities || []),
+            ...(drop.transition_probabilities || [])
+          ];
           for (const n of this.nodes.values()) {
             n.transition_probabilities = (n.transition_probabilities || [])
               .map(e => (e.target_node_id === drop.id ? { ...e, target_node_id: keep.id } : e))
+              .filter(e => e.target_node_id !== n.id)
               .filter((e, idx, arr) => arr.findIndex(x => x.target_node_id === e.target_node_id) === idx);
           }
           this.nodes.delete(drop.id);
@@ -471,7 +536,7 @@ export class JEVLattice {
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       meta: { ...this.meta },
-      nodes: this.listNodes().map(n => ({ ...n }))
+      nodes: this.listNodes().map(n => deepClone(n))
     };
   }
 
@@ -482,8 +547,11 @@ export class JEVLattice {
     if (state.schema && !String(state.schema).startsWith("jev-lattice/")) {
       console.warn("Unexpected schema:", state.schema);
     }
+    if (state.nodes !== undefined && !Array.isArray(state.nodes)) {
+      return { ok: false, error: "state.nodes must be an array" };
+    }
     this.nodes.clear();
-    const nodes = state.nodes || [];
+    const nodes = deepClone(state.nodes || []);
     for (const raw of nodes) {
       if (!raw.id) continue;
       const proofs = Array.isArray(raw.active_proofs)
@@ -494,7 +562,7 @@ export class JEVLattice {
         node_type: raw.node_type === "QUESTION" ? "QUESTION" : "OBSERVATION",
         text: raw.text || "",
         tags: raw.tags || [],
-        spatial_coordinate: raw.spatial_coordinate || [0, 0],
+        spatial_coordinate: sanitizeCoord(raw.spatial_coordinate),
         embedding: raw.embedding || embed(raw.text || ""),
         transition_probabilities: raw.transition_probabilities || [],
         epistemic_uncertainty: raw.epistemic_uncertainty ?? 0.3,
@@ -503,11 +571,14 @@ export class JEVLattice {
         last_consolidated: raw.last_consolidated || null,
         created_at: raw.created_at || new Date().toISOString(),
         hierarchical_links: raw.hierarchical_links || { parent_node: null, child_nodes: [] },
-        question_spec: raw.question_spec ? normalizeQuestionSpec(raw.question_spec) : null,
+        question_spec:
+          raw.question_spec || raw.node_type === "QUESTION"
+            ? normalizeQuestionSpec(raw.question_spec || {})
+            : null,
         active_proofs: proofs
       });
     }
-    this.version = state.version || 0;
+    this.version = num(state.version, 0);
     this.createdAt = state.createdAt || new Date().toISOString();
     this.updatedAt = state.updatedAt || new Date().toISOString();
     this.meta = { ...(state.meta || {}), schema: SCHEMA };
@@ -551,21 +622,23 @@ export class JEVLattice {
     this.updatedAt = new Date().toISOString();
   }
 
-  _recomputeNodeMetrics(n) {
-    if (n.active_proofs && n.active_proofs.length) {
-      const mps = multiProofSalience(n.active_proofs);
-      n.salience_score = clamp(Math.max(n.salience_score, mps), 0, 1);
+  _recomputeNodeMetrics(n, { reset = false } = {}) {
+    const live = (n.active_proofs || []).filter(p => !p.invalidated);
+    if (live.length) {
+      const mps = multiProofSalience(live);
+      n.salience_score = clamp(reset ? mps : Math.max(n.salience_score, mps), 0, 1);
       // Uncertainty falls as independent proofs accumulate
-      const avgConf =
-        n.active_proofs.reduce((s, p) => s + (Number(p.confidence) || 0), 0) /
-        n.active_proofs.length;
+      const avgConf = live.reduce((s, p) => s + p.confidence, 0) / live.length;
       n.epistemic_uncertainty = clamp(1 - avgConf, 0.02, 1);
+    } else if (reset) {
+      n.epistemic_uncertainty = Math.max(n.epistemic_uncertainty, 0.4);
     }
   }
 
   _cheapestProofCost(n) {
-    if (!n.active_proofs || n.active_proofs.length === 0) return 0.9;
-    return Math.min(...n.active_proofs.map(p => Number(p.cost_weight) || 0.5));
+    const live = (n.active_proofs || []).filter(p => !p.invalidated);
+    if (live.length === 0) return 0.9;
+    return Math.min(...live.map(p => p.cost_weight));
   }
 
   _nodeSummary(n) {
@@ -639,35 +712,70 @@ export class JEVLattice {
   }
 }
 
+function sanitizeCoord(c) {
+  const out = [0, 0];
+  if (Array.isArray(c)) for (let i = 0; i < DEFAULT_DIM; i++) out[i] = num(c[i], 0);
+  return out;
+}
+
 function normalizeQuestionSpec(spec) {
-  if (!spec || typeof spec !== "object") return null;
+  if (!spec || typeof spec !== "object") spec = {};
   const mode = String(spec.evaluation_mode || "BINARY").toUpperCase();
+  const maxAge = num(spec.max_proof_age_ms, null);
   return {
     evaluation_mode: mode === "COORDINATED" ? "COORDINATED" : "BINARY",
-    required_independent_proofs: Math.max(1, Number(spec.required_independent_proofs) || 1),
-    confidence_threshold: clamp(Number(spec.confidence_threshold) || 0.85, 0, 1),
-    intent: spec.intent || null
+    required_independent_proofs: Math.max(1, Math.floor(num(spec.required_independent_proofs, 1))),
+    confidence_threshold: clamp(num(spec.confidence_threshold, 0.85), 0, 1),
+    intent: spec.intent || null,
+    // Optional: proofs older than this stop counting (deterministic given `now`)
+    max_proof_age_ms: maxAge !== null && maxAge > 0 ? maxAge : null,
+    // Optional: only these source types may close the gate
+    allowed_sources: Array.isArray(spec.allowed_sources) && spec.allowed_sources.length
+      ? spec.allowed_sources.map(String)
+      : null,
+    // A confident "no" alongside enough "yes" paths blocks GO unless disabled
+    block_on_conflict: spec.block_on_conflict !== false
   };
 }
 
 function normalizeProof(p) {
-  if (!p || typeof p !== "object") {
-    return {
-      proof_id: uid("proof"),
-      source_type: "UNKNOWN",
-      confidence: 0.5,
-      cost_weight: 0.5,
-      timestamp: new Date().toISOString()
-    };
-  }
-  return {
+  if (!p || typeof p !== "object") p = {};
+  const out = {
     proof_id: p.proof_id || uid("proof"),
     source_type: String(p.source_type || "UNKNOWN"),
-    confidence: clamp(Number(p.confidence) || 0.5, 0, 1),
-    cost_weight: clamp(Number(p.cost_weight) ?? 0.5, 0, 1),
+    confidence: clamp(num(p.confidence, 0.5), 0, 1),
+    cost_weight: clamp(num(p.cost_weight, 0.5), 0, 1),
     timestamp: p.timestamp || new Date().toISOString(),
     note: p.note || null
   };
+  // Optional provenance — carried through untouched when present
+  for (const k of ["provider", "model", "independence_key", "evidence", "latency_ms", "raw_answer"]) {
+    if (p[k] !== undefined && p[k] !== null) out[k] = p[k];
+  }
+  if (p.invalidated) {
+    out.invalidated = true;
+    out.invalidated_reason = p.invalidated_reason || null;
+    out.invalidated_at = p.invalidated_at || null;
+  }
+  return out;
+}
+
+/** Proofs from the same independence key are one verification path. */
+function independenceKey(p) {
+  if (p.independence_key) return String(p.independence_key);
+  return p.provider ? `${p.source_type}:${p.provider}` : p.source_type;
+}
+
+function liveProofs(proofs, spec, now = Date.now()) {
+  return (proofs || []).filter(p => {
+    if (p.invalidated) return false;
+    if (spec.allowed_sources && !spec.allowed_sources.includes(p.source_type)) return false;
+    if (spec.max_proof_age_ms) {
+      const t = Date.parse(p.timestamp);
+      if (!Number.isFinite(t) || now - t > spec.max_proof_age_ms) return false;
+    }
+    return true;
+  });
 }
 
 /**
@@ -677,7 +785,8 @@ export function createToolRegistry(lattice) {
   return {
     ingest: (args = {}) => lattice.ingest(args),
     addProof: (args = {}) => lattice.addProof(args.id || args.nodeId, args.proof || args),
-    evaluateGoNoGo: (args = {}) => lattice.evaluateGoNoGo(args.id || args.nodeId),
+    evaluateGoNoGo: (args = {}) => lattice.evaluateGoNoGo(args.id || args.nodeId, args.now ? { now: args.now } : {}),
+    invalidateProof: (args = {}) => lattice.invalidateProof(args.id || args.nodeId, args.proof_id, args.reason),
     query: (args = {}) => lattice.query(args),
     consolidate: (args = {}) => lattice.consolidate(args),
     exportState: () => lattice.exportState(),
@@ -693,7 +802,7 @@ export function createToolRegistry(lattice) {
     listTools: () => ({
       ok: true,
       tools: [
-        "ingest", "addProof", "evaluateGoNoGo", "query", "consolidate",
+        "ingest", "addProof", "invalidateProof", "evaluateGoNoGo", "query", "consolidate",
         "exportState", "importState", "listNodes", "getNode", "prune",
         "boost", "stats", "listTools"
       ]
@@ -701,4 +810,7 @@ export function createToolRegistry(lattice) {
   };
 }
 
-export { SCHEMA, embed, dist, cosine, multiProofSalience };
+export {
+  SCHEMA, embed, dist, cosine, multiProofSalience,
+  normalizeProof, normalizeQuestionSpec, independenceKey
+};

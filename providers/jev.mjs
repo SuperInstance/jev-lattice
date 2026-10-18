@@ -1,0 +1,149 @@
+#!/usr/bin/env node
+/**
+ * TypeSafe Jev provider — System One model with calibrated typed answers.
+ *
+ * Jev is the cheap, fast verifier in the lattice: a Noul answer is the
+ * calibrated probability that a yes/no question is true given `state`,
+ * which maps 1:1 onto a proof's `confidence`.
+ *
+ * Works in Node >=18, browsers, and Cloudflare Workers (fetch only).
+ *
+ * CLI:
+ *   TYPESAFE_AI_TOKEN=... node providers/jev.mjs '<state string or JSON>' "Yes/no question?"
+ */
+
+export const JEV_DEFAULT_MODEL = "jev-latest";
+const DEFAULT_BASE = "https://api.typesafe.ai/v1";
+/** Jev is ~an order of magnitude cheaper than a CoT LLM call; used for path cost bias. */
+export const JEV_COST_WEIGHT = 0.05;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+export function createJev({
+  apiKey = globalThis.process?.env?.TYPESAFE_AI_TOKEN,
+  model = JEV_DEFAULT_MODEL,
+  baseUrl = DEFAULT_BASE,
+  fetchImpl = globalThis.fetch,
+  maxRetries = 4,
+  timeoutMs = 60000
+} = {}) {
+  if (!apiKey) throw new Error("Jev: missing api key (TYPESAFE_AI_TOKEN)");
+  const usage = { calls: 0, input_tokens: 0, output_tokens: 0, questions: 0 };
+
+  /**
+   * Raw System One call. `questions` is a map id → {type, instructions, criteria?}.
+   * Retries 429/529/5xx with exponential backoff as the API docs recommend.
+   */
+  async function ask(state, questions, { model: m = model } = {}) {
+    const body = JSON.stringify({ state, model: m, questions });
+    let lastErr;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      let res;
+      try {
+        res = await fetchImpl(`${baseUrl}/systemone`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body,
+          signal: ctrl.signal
+        });
+      } catch (e) {
+        lastErr = e;
+        await sleep(500 * 2 ** attempt);
+        continue;
+      } finally {
+        clearTimeout(timer);
+      }
+      if (res.status === 429 || res.status === 529 || res.status >= 500) {
+        lastErr = new Error(`Jev transient ${res.status}`);
+        const ra = Number(res.headers.get?.("retry-after"));
+        await sleep(Number.isFinite(ra) && ra > 0 ? ra * 1000 : 500 * 2 ** attempt);
+        continue;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(`Jev error ${res.status}: ${JSON.stringify(data).slice(0, 400)}`);
+        err.status = res.status;
+        throw err;
+      }
+      usage.calls++;
+      usage.questions += Object.keys(questions).length;
+      usage.input_tokens += data.usage?.input_tokens || 0;
+      usage.output_tokens += data.usage?.output_tokens || 0;
+      return data;
+    }
+    throw lastErr;
+  }
+
+  /** One yes/no question → probability of yes. */
+  async function noul(state, instructions, criteria) {
+    const q = { type: "noul", instructions };
+    if (criteria) q.criteria = criteria;
+    const t0 = Date.now();
+    const data = await ask(state, { q });
+    return { p: data.answers.q.noul, model: data.model, latency_ms: Date.now() - t0, usage: data.usage };
+  }
+
+  /**
+   * Speculative fan-out: many yes/no questions in one request.
+   * `items` = [{ key, instructions, criteria? }] → { key: {p} , _model, _latency_ms }
+   */
+  async function nouls(state, items) {
+    const questions = {};
+    for (const it of items) {
+      questions[it.key] = { type: "noul", instructions: it.instructions };
+      if (it.criteria) questions[it.key].criteria = it.criteria;
+    }
+    const t0 = Date.now();
+    const data = await ask(state, questions);
+    const out = { _model: data.model, _latency_ms: Date.now() - t0, _usage: data.usage };
+    for (const it of items) out[it.key] = { p: data.answers[it.key]?.noul };
+    return out;
+  }
+
+  async function choice(state, instructions, criteria) {
+    const data = await ask(state, { q: { type: "choice", instructions, criteria } });
+    return { ...data.answers.q, model: data.model };
+  }
+
+  async function score(state, instructions, criteria) {
+    const data = await ask(state, { q: { type: "score", instructions, criteria } });
+    return { ...data.answers.q, model: data.model };
+  }
+
+  async function models() {
+    const res = await fetchImpl(`${baseUrl}/models`, { headers: { Authorization: `Bearer ${apiKey}` } });
+    return res.json();
+  }
+
+  return { ask, noul, nouls, choice, score, models, usage, model, provider: "typesafe" };
+}
+
+/** Convert a Noul result into a lattice proof. */
+export function noulToProof({ p, model, latency_ms }, { note = null, instructions = null } = {}) {
+  return {
+    source_type: "JEV_NOUL",
+    provider: "typesafe",
+    model: model || JEV_DEFAULT_MODEL,
+    confidence: p,
+    cost_weight: JEV_COST_WEIGHT,
+    latency_ms,
+    note,
+    evidence: instructions ? { instructions } : undefined
+  };
+}
+
+// ---------- CLI ----------
+const isMain = globalThis.process?.argv?.[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+if (isMain) {
+  const [stateArg, question] = process.argv.slice(2);
+  if (!stateArg || !question) {
+    console.error('usage: node providers/jev.mjs "<state>" "<yes/no question>"');
+    process.exit(2);
+  }
+  let state = stateArg;
+  try { state = JSON.parse(stateArg); } catch {}
+  const jev = createJev();
+  console.log(JSON.stringify(await jev.noul(state, question), null, 2));
+}

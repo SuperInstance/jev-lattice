@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jev-lattice",
+  "main": "worker/index.mjs",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": "worker/public", "binding": "ASSETS" },
+  "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [{ "name": "LATTICE", "class_name": "LatticeDO" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LatticeDO"] }],
+  "observability": { "enabled": true }
+  // secrets: JEV_API_KEY (required), TYPESAFE_AI_TOKEN, MINIMAX_TOKEN
+}

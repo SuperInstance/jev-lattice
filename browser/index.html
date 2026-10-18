@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>JEV Lattice PoC v0.2 — Question Graph + Go/No-Go</title>
+  <link rel="icon" href="data:," />
+  <title>JEV Lattice</title>
   <style>
     :root {
       --bg: #0d1117;
@@ -212,7 +213,7 @@
 <body>
   <header>
     <h1>JEV Lattice</h1>
-    <span class="tag">v0.2 · question graph · go/no-go · downloadable state</span>
+    <span class="tag">v0.3 · question graph · go/no-go · downloadable state</span>
     <div class="controls">
       <button id="btn-idle" class="primary" title="Run one consolidation cycle">Idle Cycle</button>
       <button id="btn-query">Query Beam</button>
@@ -306,6 +307,17 @@
           <button id="btn-run-tool" class="primary">Run Tool</button>
         </div>
         <div class="tool-call" id="tool-result">// result appears here</div>
+        <label style="margin-top:14px;">Edge lattice (Cloudflare Worker)</label>
+        <input id="edge-url" placeholder="https://jev-lattice.<you>.workers.dev (blank = this site)" />
+        <div class="row" style="display:flex;gap:6px;margin-top:6px;">
+          <input id="edge-name" placeholder="lattice name" value="default" style="flex:1" />
+          <input id="edge-key" type="password" placeholder="JEV_API_KEY" style="flex:1" autocomplete="off" />
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+          <button id="btn-edge-push">Push to edge</button>
+          <button id="btn-edge-pull">Pull from edge</button>
+          <button id="btn-edge-verify" class="success" title="Push, then let Jev verify every open gate in one call at the edge, then pull">Verify open gates (Jev)</button>
+        </div>
       </div>
 
       <div class="panel" id="panel-about">
@@ -318,7 +330,7 @@
           Download state, edit proofs offline, upload on another machine.
         </p>
         <p style="font-size:0.75rem;color:var(--muted);">
-          Schema <code>jev-lattice/v0.2</code>. Tools are the contract — re-host under any runtime.
+          Schema <code>jev-lattice/v0.3</code>. Tools are the contract — re-host under any runtime.
         </p>
       </div>
     </aside>
@@ -326,7 +338,7 @@
 
   <footer>
     <span>state: <strong id="foot-state">empty</strong></span>
-    <span>schema: jev-lattice/v0.2</span>
+    <span>schema: jev-lattice/v0.3</span>
     <span>tools on <code>window.JEV</code></span>
   </footer>
 

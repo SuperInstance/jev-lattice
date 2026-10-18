@@ -1,5 +1,5 @@
 /**
- * JEV Lattice UI + global tool surface (v0.2 — question graph)
+ * JEV Lattice UI + global tool surface (v0.3 — question graph)
  */
 import { JEVLattice, createToolRegistry, SCHEMA } from "../jev-core.js";
 
@@ -10,7 +10,7 @@ window.JEV = {
   lattice,
   tools,
   SCHEMA,
-  version: "0.2.0",
+  version: "0.3.0",
   call(name, args) {
     if (!tools[name]) throw new Error(`Unknown tool: ${name}`);
     return tools[name](args || {});
@@ -324,8 +324,8 @@ function runQuery() {
 function runGoNoGo() {
   if (!selectedId) return;
   const res = tools.evaluateGoNoGo({ id: selectedId });
-  lastAction = res.go ? "GO" : "NO-GO";
-  log(`${selectedId}: ${res.go ? "GO" : "NO-GO"} — ${res.reason}`, res.go ? "ok" : "warn");
+  lastAction = res.verdict || (res.go ? "GO" : "NO-GO");
+  log(`${selectedId}: ${lastAction} — ${res.reason}`, res.go ? "ok" : "warn");
   toolResult.textContent = JSON.stringify(res, null, 2);
   selectNode(selectedId);
 }
@@ -341,6 +341,8 @@ function addCheapProof() {
     id: selectedId,
     proof: {
       source_type: "DETERMINISTIC_PARSER",
+      // each click is a distinct verification path; same-provider proofs count once
+      provider: `manual-${(n.active_proofs || []).length + 1}`,
       confidence: 0.97,
       cost_weight: 0.02,
       note: "manual cheap proof (PoC)"
@@ -545,11 +547,55 @@ const toolSelect = document.getElementById("tool-select");
 if (toolSelect) {
   toolSelect.innerHTML = [
     "ingest", "addProof", "evaluateGoNoGo", "query", "consolidate",
-    "exportState", "importState", "listNodes", "getNode", "prune", "boost", "stats"
+    "invalidateProof", "exportState", "importState", "listNodes", "getNode", "prune", "boost", "stats"
   ].map(t => `<option value="${t}">${t}</option>`).join("");
 }
 
 window.addEventListener("resize", resize);
 resize();
 refreshList();
-log("JEV lattice v0.2 ready — question graph + go/no-go · tools on window.JEV", "ok");
+log("JEV lattice v0.3 ready — question graph + go/no-go · tools on window.JEV", "ok");
+
+// ---------- edge sync (Cloudflare Worker + Durable Object) ----------
+const edgeUrl = document.getElementById("edge-url");
+const edgeName = document.getElementById("edge-name");
+const edgeKey = document.getElementById("edge-key");
+try { edgeKey.value = sessionStorage.getItem("jev-edge-key") || ""; } catch {}
+
+async function edge(pathPart, init = {}) {
+  try { sessionStorage.setItem("jev-edge-key", edgeKey.value); } catch {}
+  const base = (edgeUrl.value || location.origin).replace(/\/$/, "");
+  const res = await fetch(`${base}/api/${encodeURIComponent(edgeName.value || "default")}/${pathPart}`, {
+    ...init,
+    headers: { authorization: `Bearer ${edgeKey.value}`, "content-type": "application/json", ...(init.headers || {}) }
+  });
+  const body = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+  if (!res.ok || body.ok === false) throw new Error(body.error || `HTTP ${res.status}`);
+  return body;
+}
+
+async function edgePush() {
+  const r = await edge("state", { method: "PUT", body: JSON.stringify(tools.exportState()) });
+  log(`pushed ${r.nodes} nodes to edge lattice "${edgeName.value}"`, "ok");
+}
+
+async function edgePull() {
+  const st = await edge("state");
+  const r = tools.importState(st);
+  lastAction = "edge pull";
+  log(`pulled ${r.nodes} nodes from edge`, "ok");
+  refreshList();
+  draw();
+}
+
+async function edgeVerify() {
+  await edgePush();
+  const r = await edge("tool/jev_verify_open", { method: "POST", body: "{}" });
+  toolResult.textContent = JSON.stringify(r, null, 2);
+  log(`Jev verified ${r.verified} open gate(s) at the edge in ${r.latency_ms ?? "?"} ms`, "ok");
+  await edgePull();
+}
+
+for (const [id, fn] of [["btn-edge-push", edgePush], ["btn-edge-pull", edgePull], ["btn-edge-verify", edgeVerify]]) {
+  document.getElementById(id)?.addEventListener("click", () => fn().catch(e => log(`edge: ${e.message}`, "err")));
+}

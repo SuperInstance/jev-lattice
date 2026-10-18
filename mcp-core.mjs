@@ -1,0 +1,201 @@
+/**
+ * Transport-agnostic MCP layer: tool definitions + JSON-RPC dispatch.
+ * Used by mcp-server.mjs (stdio) and worker/ (Streamable HTTP on Cloudflare).
+ *
+ * No Node built-ins here — runs in Workers and browsers too.
+ */
+import { createToolRegistry, SCHEMA } from "./jev-core.js";
+import * as orch from "./orchestrator.mjs";
+
+export const SERVER_INFO = { name: "jev-lattice", version: "0.3.0" };
+export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+const PROOF_SCHEMA = {
+  type: "object",
+  properties: {
+    source_type: {
+      type: "string",
+      description: "LLM_CHAIN_OF_THOUGHT | DETERMINISTIC_PARSER | SENSOR | SMALL_MODEL | LATTICE_READ | JEV_NOUL | …"
+    },
+    confidence: { type: "number", minimum: 0, maximum: 1 },
+    cost_weight: { type: "number", minimum: 0, maximum: 1 },
+    provider: { type: "string", description: "Distinguishes independent paths of the same source_type" },
+    independence_key: { type: "string", description: "Proofs sharing a key count as one path" },
+    note: { type: "string" }
+  },
+  required: ["source_type", "confidence"]
+};
+
+const SPEC_SCHEMA = {
+  type: "object",
+  properties: {
+    evaluation_mode: { type: "string", enum: ["BINARY", "COORDINATED"] },
+    required_independent_proofs: { type: "number" },
+    confidence_threshold: { type: "number" },
+    intent: { type: "string" },
+    max_proof_age_ms: { type: "number" },
+    allowed_sources: { type: "array", items: { type: "string" } },
+    block_on_conflict: { type: "boolean" }
+  }
+};
+
+const ID = { type: "object", properties: { id: { type: "string" } }, required: ["id"] };
+const EMPTY = { type: "object", properties: {} };
+const STATE_ARG = {
+  description: "System One state: text or JSON the verifier reads (config, log, diff…). Defaults to the lattice neighborhood.",
+  type: ["string", "object", "array"]
+};
+
+const MUTATING = new Set([
+  "jev_ingest", "jev_add_proof", "jev_invalidate_proof", "jev_consolidate", "jev_import_state",
+  "jev_boost", "jev_prune", "jev_verify", "jev_verify_open", "jev_minimax_proof", "jev_decompose",
+  "jev_rollup", "jev_compile", "jev_edge_proof"
+]);
+
+export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false } = {}) {
+  const defs = [
+    { name: "jev_ingest", description: "Ingest text as OBSERVATION or QUESTION. For questions pass question_spec (BINARY|COORDINATED) and optional initial proof.",
+      inputSchema: { type: "object", properties: {
+        text: { type: "string" }, tags: { type: "array", items: { type: "string" } },
+        node_type: { type: "string", enum: ["OBSERVATION", "QUESTION"] },
+        question_spec: SPEC_SCHEMA, proof: PROOF_SCHEMA }, required: ["text"] } },
+    { name: "jev_add_proof", description: "Append an independent proof to a QUESTION node. Updates multi-proof salience and go/no-go.",
+      inputSchema: { type: "object", properties: { id: { type: "string" }, proof: PROOF_SCHEMA }, required: ["id", "proof"] } },
+    { name: "jev_invalidate_proof", description: "Kill one verification path (e.g. its evidence changed). The gate re-evaluates on the remaining paths.",
+      inputSchema: { type: "object", properties: { id: { type: "string" }, proof_id: { type: "string" }, reason: { type: "string" } }, required: ["id", "proof_id"] } },
+    { name: "jev_evaluate_go_no_go", description: "Deterministic gate. Verdict GO | OPEN | REFUTED | CONFLICT. BINARY needs one proof ≥ threshold; COORDINATED needs k independent ones.",
+      inputSchema: ID },
+    { name: "jev_query", description: "Spatial + probabilistic beam search over the lattice. Prefers closed/low-cost paths.",
+      inputSchema: { type: "object", properties: { text: { type: "string" }, tags: { type: "array", items: { type: "string" } }, topK: { type: "number" }, beam: { type: "number" } } } },
+    { name: "jev_consolidate", description: "Idle cycle: stitch edges, soft-merge observations, prune low-salience, mark open questions seeking_verification.", inputSchema: EMPTY },
+    { name: "jev_stats", description: "Lattice stats: nodes, questions, open gates, edges, averages.", inputSchema: EMPTY },
+    { name: "jev_list_nodes", description: "List node summaries (id, text, type, verdict).", inputSchema: EMPTY },
+    { name: "jev_get_node", description: "Get full node by id.", inputSchema: ID },
+    { name: "jev_boost", description: "Raise a node's salience.", inputSchema: { type: "object", properties: { id: { type: "string" }, delta: { type: "number" } }, required: ["id"] } },
+    { name: "jev_prune", description: "Delete a node and its edges.", inputSchema: ID },
+    { name: "jev_rollup", description: "Deterministic: if all child sub-questions are GO, add a cheap LATTICE_READ proof to the parent (or a refuting one if a child is REFUTED).", inputSchema: ID },
+    { name: "jev_export_state", description: `Export full lattice JSON (schema ${SCHEMA}).`, inputSchema: EMPTY },
+    { name: "jev_import_state", description: "Import lattice JSON state (replaces current).",
+      inputSchema: { type: "object", properties: { state: { type: "object" } }, required: ["state"] } }
+  ];
+  if (hasCapacity) {
+    defs.push({ name: "jev_capacity", description: "Report host capacity probe and current policy tier.", inputSchema: EMPTY });
+  }
+  if (hasJev) {
+    defs.push(
+      { name: "jev_verify", description: "Ask TypeSafe Jev (calibrated System One model) whether a QUESTION holds given `state`; appends a cheap JEV_NOUL proof.",
+        inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG, instructions: { type: "string" } }, required: ["id"] } },
+      { name: "jev_verify_open", description: "Speculative fan-out: verify every open QUESTION against one shared `state` in a single Jev request.",
+        inputSchema: { type: "object", properties: { state: STATE_ARG, ids: { type: "array", items: { type: "string" } } } } }
+    );
+  }
+  if (hasMiniMax) {
+    defs.push(
+      { name: "jev_minimax_proof", description: "Expensive discovery path: MiniMax chain-of-thought judges the question; appends an LLM_CHAIN_OF_THOUGHT proof.",
+        inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG }, required: ["id"] } },
+      { name: "jev_decompose", description: "MiniMax splits a QUESTION into atomic BINARY sub-questions linked as children.",
+        inputSchema: { type: "object", properties: { id: { type: "string" }, maxSub: { type: "number" } }, required: ["id"] } }
+    );
+  }
+  if (hasSmall) {
+    defs.push({ name: "jev_edge_proof", description: "Independent SMALL_MODEL proof from an on-edge model (Cloudflare Workers AI).",
+      inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG }, required: ["id"] } });
+  }
+  if (hasJev || hasMiniMax) {
+    defs.push({ name: "jev_compile", description: "Progressive compilation for one question: Jev first → MiniMax CoT → decompose + Jev fan-out → roll-up. Stops when decided.",
+      inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG }, required: ["id"] } });
+  }
+  return defs;
+}
+
+/**
+ * @param {object} o
+ * @param {import('./jev-core.js').JEVLattice} o.lattice
+ * @param {object} [o.jev]  providers/jev.mjs client
+ * @param {object} [o.mm]   providers/minimax.mjs client
+ * @param {object} [o.small] small/edge model client with json() (Workers AI)
+ * @param {() => object} [o.capacity]  harness snapshot fn (Node only)
+ * @param {() => object} [o.consolidateOpts]
+ * @param {() => Promise<void>|void} [o.persist] called after mutating tools
+ */
+export function createMcp({ lattice, jev = null, mm = null, small = null, capacity = null, consolidateOpts = () => ({}), persist = null }) {
+  const tools = createToolRegistry(lattice);
+  const defs = toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small });
+  const names = new Set(defs.map(d => d.name));
+
+  async function callTool(name, args = {}) {
+    if (!names.has(name)) return { ok: false, error: `unknown tool: ${name}` };
+    switch (name) {
+      case "jev_ingest": return tools.ingest(args);
+      case "jev_add_proof": return tools.addProof({ id: args.id, proof: args.proof });
+      case "jev_invalidate_proof": return tools.invalidateProof(args);
+      case "jev_evaluate_go_no_go": return tools.evaluateGoNoGo({ id: args.id });
+      case "jev_query": return tools.query(args);
+      case "jev_consolidate": return tools.consolidate(consolidateOpts());
+      case "jev_stats": return capacity ? { ...tools.stats(), capacity: capacity() } : tools.stats();
+      case "jev_list_nodes":
+        return { ok: true, nodes: lattice.listNodes().map(n => lattice._nodeSummary(n)).map(s => ({ ...s, verdict: s.node_type === "QUESTION" ? lattice.evaluateGoNoGo(s.id).verdict : undefined })) };
+      case "jev_get_node": return tools.getNode({ id: args.id });
+      case "jev_boost": return tools.boost(args);
+      case "jev_prune": return tools.prune(args);
+      case "jev_rollup": return orch.rollup(lattice, args.id);
+      case "jev_export_state": return tools.exportState();
+      case "jev_import_state": return tools.importState({ state: args.state });
+      case "jev_capacity": return { ok: true, ...capacity() };
+      case "jev_verify": return orch.verifyWithJev(lattice, args.id, { jev, state: args.state, instructions: args.instructions });
+      case "jev_verify_open": return orch.verifyOpenGates(lattice, { jev, state: args.state, ids: args.ids });
+      case "jev_minimax_proof": return orch.proveWithMiniMax(lattice, args.id, { mm, state: args.state });
+      case "jev_decompose": return orch.decompose(lattice, args.id, { mm, maxSub: args.maxSub });
+      case "jev_compile": return orch.compile(lattice, args.id, { jev, mm, state: args.state });
+      case "jev_edge_proof":
+        return orch.proveWithLLM(lattice, args.id, { llm: small, state: args.state, source_type: "SMALL_MODEL", provider: small.provider, cost_weight: 0.15 });
+    }
+  }
+
+  const ok = (id, result) => ({ jsonrpc: "2.0", id, result });
+  const fail = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
+
+  /** Handle one JSON-RPC message. Returns a response object, or null for notifications. */
+  async function handle(msg) {
+    if (!msg || typeof msg !== "object" || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
+      return fail(msg?.id ?? null, -32600, "Invalid Request");
+    }
+    const isNotification = msg.id === undefined || msg.id === null;
+    if (isNotification) return null; // notifications/initialized, cancelled, …
+
+    switch (msg.method) {
+      case "initialize": {
+        const requested = msg.params?.protocolVersion;
+        return ok(msg.id, {
+          protocolVersion: PROTOCOL_VERSIONS.includes(requested) ? requested : PROTOCOL_VERSIONS[0],
+          capabilities: { tools: { listChanged: false } },
+          serverInfo: SERVER_INFO,
+          instructions:
+            "JEV lattice: store QUESTIONs with explicit proof contracts, add independent proofs, and read the deterministic go/no-go verdict. " +
+            "Prefer cheap verifiers (jev_verify) before expensive ones (jev_minimax_proof)."
+        });
+      }
+      case "ping": return ok(msg.id, {});
+      case "tools/list": return ok(msg.id, { tools: defs });
+      case "tools/call": {
+        const name = msg.params?.name;
+        if (!names.has(name)) return fail(msg.id, -32602, `Unknown tool: ${name}`);
+        try {
+          const result = await callTool(name, msg.params?.arguments || {});
+          if (MUTATING.has(name) && persist && result?.ok !== false) await persist();
+          return ok(msg.id, {
+            content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
+            structuredContent: result,
+            isError: result?.ok === false
+          });
+        } catch (e) {
+          return ok(msg.id, { content: [{ type: "text", text: `Error: ${e.message}` }], isError: true });
+        }
+      }
+      default:
+        return fail(msg.id, -32601, `Method not found: ${msg.method}`);
+    }
+  }
+
+  return { handle, callTool, defs };
+}

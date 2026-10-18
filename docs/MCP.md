@@ -14,16 +14,20 @@ Environment:
 |----------|---------|---------|
 | `JEV_STATE_PATH` | `./jev-state.json` | Persist/load lattice |
 | `JEV_TIER` | auto | `minimal` \| `standard` \| `high` |
+| `TYPESAFE_AI_TOKEN` | — | enables `jev_verify`, `jev_verify_open`, `jev_compile` |
+| `MINIMAX_TOKEN` | — | enables `jev_minimax_proof`, `jev_decompose`, `jev_compile` |
+| `JEV_NO_PROVIDERS` | — | `1` hides provider tools (offline / tests) |
 
 ## Tools
 
 See main README for full list. Names are prefixed `jev_` on the wire:
 
-- `jev_ingest`, `jev_add_proof`, `jev_evaluate_go_no_go`
-- `jev_query`, `jev_consolidate`, `jev_stats`
-- `jev_list_nodes`, `jev_get_node`
+- `jev_ingest`, `jev_add_proof`, `jev_invalidate_proof`, `jev_evaluate_go_no_go`
+- `jev_query`, `jev_consolidate`, `jev_stats`, `jev_rollup`
+- `jev_list_nodes`, `jev_get_node`, `jev_boost`, `jev_prune`
 - `jev_export_state`, `jev_import_state`
-- `jev_capacity`
+- `jev_capacity` (stdio only)
+- with providers: `jev_verify`, `jev_verify_open`, `jev_minimax_proof`, `jev_decompose`, `jev_compile`, `jev_edge_proof` (Worker only)
 
 Mutating calls persist state to `JEV_STATE_PATH`.
 
@@ -68,8 +72,13 @@ Mutating calls persist state to `JEV_STATE_PATH`.
 }
 ```
 
+## Remote (Cloudflare)
+
+The same tools are served over HTTP at `POST /mcp/:lattice`. See [CLOUDFLARE.md](CLOUDFLARE.md).
+
 ## Notes
 
-- This is a **minimal stdio MCP tool server**, not a full SDK binding. Hosts that speak MCP tools/list + tools/call work.  
-- For production hardening, wrap with the official MCP SDK transport if your host requires negotiated capabilities beyond this subset.  
-- The lattice schema and tool semantics remain the source of truth; the MCP layer is an adapter.
+- The protocol version is negotiated (`2025-06-18`, `2025-03-26`, `2024-11-05`). Notifications get no response.
+- Tool failures return `isError: true` together with `structuredContent`. An unknown tool returns error `-32602`, and a malformed line returns `-32700`; the server keeps serving after both.
+- Messages are handled serially, and state is written with write-then-rename so a crash can't truncate the file.
+- Tool definitions and dispatch live in `mcp-core.mjs`. The stdio server and the Worker are thin transports over it.

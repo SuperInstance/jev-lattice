@@ -3,3 +3,5 @@ jev-state.json
 .wrangler/
 .dev.vars
 *.log
+worker/public/
+dist/
