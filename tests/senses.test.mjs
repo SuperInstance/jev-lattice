@@ -42,3 +42,9 @@ test("earned discount: a small clean bank cannot drop the bar below the floor", 
   const many = [...Array.from({ length: 40 }, () => [0.6, true]), [0.1, false]];
   assert.equal(learnThreshold(many, { minSamples: 5, floor: 0.9, minGoForDiscount: 30 }).t, 0.5, "40 clean GOs earn the discount");
 });
+
+test("tolerance treats a small share of GO-side 'no' labels as teacher noise", () => {
+  const s = [...Array.from({ length: 49 }, () => [0.97, true]), [0.97, false], ...Array.from({ length: 20 }, () => [0.1, false])];
+  assert.equal(learnThreshold(s, { minSamples: 5 }).t, null, "strict: the single flipped label blocks every bar ≤ 0.97");
+  assert.equal(learnThreshold(s, { minSamples: 5, tolerance: 0.03 }).t, 0.5);
+});

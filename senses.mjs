@@ -38,12 +38,14 @@ export function createLabelBank(store) {
  * Smallest threshold t (integer grid, P4) at which the sense never said GO
  * against a teacher NO, with at least `minGo` GOs supporting it. null = no safe t.
  */
-export function learnThreshold(samples, { minSamples = 8, minGo = 3, floor = null, minGoForDiscount = 0 } = {}) {
+export function learnThreshold(samples, { minSamples = 8, minGo = 3, floor = null, minGoForDiscount = 0, tolerance = 0 } = {}) {
   if (samples.length < minSamples) return { t: null, reason: "too few samples" };
   for (let i = 50; i <= 100; i++) {
     let t = i / 100;
     const go = samples.filter(([p]) => p >= t);
-    if (go.some(([, y]) => !y)) continue;
+    // tolerance: fraction of GO-side teacher "no" labels to treat as teacher noise (default 0 = fail-safe)
+    const disagree = go.filter(([, y]) => !y).length;
+    if (disagree > Math.floor(tolerance * go.length)) continue;
     if (go.length < minGo) return { t: null, reason: "no safe threshold with enough GOs" };
     // Earned discount: zero errors in a small bank is not proof of safety (rule of three:
     // n clean GOs bound the error rate at ~3/n). Below `floor` only with enough evidence.

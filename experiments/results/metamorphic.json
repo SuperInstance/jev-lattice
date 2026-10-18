@@ -1,0 +1,101 @@
+{
+  "at": "2026-10-18T05:35:31.626Z",
+  "RUNS": 2,
+  "REWRITES": 2,
+  "rewritesKept": 40,
+  "proposed": 40,
+  "dropped": 0,
+  "sampleRewrites": [
+    "bind 10.0.0.5\nport 0\ntls-port 6380\ntls-cert-file /etc/redis/redis.crt\nmaxmemory 1024mb\nmaxmemory-policy noeviction\nappendonly no",
+    "bind \"10.0.0.5\"\nport \"0\"\ntls-port \"6380\"\ntls-cert-file \"/etc/redis/redis.crt\"\nmaxmemory \"1024mb\"\nmaxmemory-policy \"noeviction\"\nappendonly \"no\"",
+    "bind 0.0.0.0\nport 6379\ntls-port 6380\ntls-cert-file /etc/redis/redis.crt\nmaxmemory 1024mb\nmaxmemory-policy allkeys-lru\nappendonly yes"
+  ],
+  "results": [
+    {
+      "run": 0,
+      "compiled": 6,
+      "policy": {
+        "plain": {
+          "accepted": 6,
+          "acceptedQs": [
+            0,
+            2,
+            4,
+            5,
+            6,
+            8
+          ],
+          "in-dist": {
+            "n": 180,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 180,
+            "wrongGo": 5,
+            "wrongNo": 6
+          }
+        },
+        "metamorphic": {
+          "accepted": 2,
+          "acceptedQs": [
+            2,
+            6
+          ],
+          "in-dist": {
+            "n": 60,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 60,
+            "wrongGo": 0,
+            "wrongNo": 0
+          }
+        }
+      }
+    },
+    {
+      "run": 1,
+      "compiled": 4,
+      "policy": {
+        "plain": {
+          "accepted": 4,
+          "acceptedQs": [
+            1,
+            2,
+            5,
+            8
+          ],
+          "in-dist": {
+            "n": 120,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 120,
+            "wrongGo": 0,
+            "wrongNo": 8
+          }
+        },
+        "metamorphic": {
+          "accepted": 2,
+          "acceptedQs": [
+            5,
+            8
+          ],
+          "in-dist": {
+            "n": 60,
+            "wrongGo": 0,
+            "wrongNo": 0
+          },
+          "shifted": {
+            "n": 60,
+            "wrongGo": 0,
+            "wrongNo": 0
+          }
+        }
+      }
+    }
+  ]
+}

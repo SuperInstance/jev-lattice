@@ -329,3 +329,22 @@ export async function invalidateChangedFiles(lattice, { files, reason = "file ch
   }
   return { ok: true, invalidated, kept, changedFiles: [...changedFiles] };
 }
+
+/**
+ * Firm up fragile verdicts (T36). For every question whose gate reports
+ * needs_corroboration (spec.require_firm), ask `secondPath` for an INDEPENDENT proof
+ * (different independence key than the decider — e.g. MiniMax CoT next to Jev).
+ * secondPath: async (lattice, nodeId) => any; it must append the proof itself.
+ */
+export async function firmUp(lattice, { secondPath, ids = null } = {}) {
+  const targets = lattice.listNodes()
+    .filter(n => n.node_type === "QUESTION" && (!ids || ids.includes(n.id)))
+    .filter(n => lattice.evaluateGoNoGo(n.id).needs_corroboration);
+  const results = await Promise.all(targets.map(async n => {
+    const before = lattice.evaluateGoNoGo(n.id).held;
+    try { await secondPath(lattice, n.id); } catch (e) { return { id: n.id, error: e.message }; }
+    const g = lattice.evaluateGoNoGo(n.id);
+    return { id: n.id, held: before, verdict: g.verdict, still_needs: !!g.needs_corroboration };
+  }));
+  return { ok: true, asked: targets.length, results };
+}

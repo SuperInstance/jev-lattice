@@ -56,7 +56,8 @@ export function createMiniMax({
   baseUrl = DEFAULT_BASE,
   fetchImpl = globalThis.fetch,
   maxRetries = 3,
-  timeoutMs = 180000
+  // long generations (code, documents) can exceed 180 s; MINIMAX_TIMEOUT_MS overrides everywhere
+  timeoutMs = Number(globalThis.process?.env?.MINIMAX_TIMEOUT_MS) || 180000
 } = {}) {
   if (!apiKey) throw new Error("MiniMax: missing api key (MINIMAX_TOKEN)");
   const usage = { calls: 0, prompt_tokens: 0, completion_tokens: 0 };
@@ -141,8 +142,7 @@ if (isMain) {
   }
   if (prompt === undefined) prompt = readFileSync(0, "utf8");
   for (const f of files) prompt += `\n\n----- FILE: ${f} -----\n${readFileSync(f, "utf8")}`;
-  // long generations (code, documents) can exceed the 180 s default per attempt
-  const mm = createMiniMax({ model, timeoutMs: Number(process.env.MINIMAX_TIMEOUT_MS) || 180000 });
+  const mm = createMiniMax({ model });
   const messages = system ? [{ role: "system", content: system }, { role: "user", content: prompt }] : prompt;
   const out = await mm.chat(messages, { maxTokens: Number(process.env.MINIMAX_MAX_TOKENS) || 40000 });
   if (!out.text && out.finish_reason === "length") {

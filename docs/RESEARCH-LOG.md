@@ -191,6 +191,16 @@ Full narrative, with alternatives and mistakes, in [JOURNAL.md](JOURNAL.md) §3.
 | Fragility (`fragility.mjs`) | flip rate within 0.02 of a 0.9 bar: 50%; 0.02–0.05: 7%; > 0.05: 0%. `fragile` caught all flips of decided gates (5/5 at 0.9, 1/1 at 0.95) |
 | MiniMax-written generator (`tf-gen.mjs` + `tf-gen-check.mjs`) | 4 prompt iterations; the working one specified the algorithm; **0/14,700** truth mismatches against an independent implementation |
 
+## 2026-10-18: round 4 (v0.6)
+
+| experiment | headline |
+|---|---|
+| R4-D metamorphic validation (`metamorphic.mjs`, 2 compiles) | The same candidate predicates were put through two acceptance tests. **Plain** (originals) accepted 6 / 4, and they failed after the format shift: 5 wrong GO + 6 wrong NO in run 0, 0 + 8 in run 1. **Metamorphic** (originals plus MiniMax rewrites that preserve meaning, kept only if Jev agrees with the original) accepted 2 / 2, with **0 errors in both runs**. MiniMax was never told what the shift looks like. Only 6 and 4 of 10 candidates compiled at all (Flash output reliability). |
+| R4-C noisy teacher (`noisy-teacher.mjs`, offline on calibration rows) | Label noise **fails safe**: 0 wrong GOs at 2–20% flips, because one mislabelled "no" blocks a bar. The cost is liveness: MiniMax recall fell 1.00 → 0.38 at just 2% noise. A `tolerance` matched to the noise recovers recall (2% noise + 3–6% tolerance → 0.90–1.00) with 0 wrong GOs. Real Jev as the teacher made 0 label errors and learned the oracle's bars, so its tolerance should be about 0: tolerance can't tell teacher noise from student error. |
+| R4-A fragility-aware gates (`firm-gates.mjs`) | **Negative result.** `require_firm` + an independent MiniMax second path made gates *less* reproducible (0.981 → 0.944 at t=0.95; 0.988 → 0.975 at 0.9), decided fewer, and cost 53 extra calls. Whether a gate is fragile is itself a noisy boundary, so the rule moves the flip band rather than removing it. Reproducibility comes from the cache. `require_firm` stays opt-in and `fragile` stays an alert. |
+| R4-E agent, redesigned (`agent-v2.mjs`, edge MCP, scored from lattice state) | Full vs curated tool surface, neutral prompt, 8 runs each, half of them "tempting" (both decidable requirements met). Both arms: **16/16 correct decisions, 0 overclaimed GO**, unknowable gate never GO. Curated: **33% fewer tool calls** (9.5 vs 14.1), and the unknowable gate stayed OPEN in 7/8 runs vs 3/8 on the full surface. With more proof sources available, the agent manufactured confident "no"s from absence of evidence. |
+| R4-B Choice-first grouping (`choice-grouping.mjs`) | MiniMax proposed 7 field-level Choice groups; Jev-Noul validation accepted 9/10 mappings. Held-out: derived Brier **0.0001** vs 0.0056, ECE 0.0015 vs 0.0374, recall @0.9 **1.000** vs 0.965, 0 wrong. The largest gains were on bind-address questions (Noul recall 0.73–0.87 → 1.00). Questions per config: 10 → 8. |
+
 ## Backlog
 1. ~~Proof cache~~: done.
 2. ~~Compiled-first scheduler~~: done. Ship refute-only.
@@ -201,12 +211,11 @@ Full narrative, with alternatives and mistakes, in [JOURNAL.md](JOURNAL.md) §3.
 7. ~~Drift detector~~: done.
 8. ~~MiniMax agent~~: done.
 
-Next (round 4):
-- R3-D: metamorphic validation of predicates. Can MiniMax-proposed, meaning-preserving rewrites of the training inputs catch the brittle predicates that 20 configs missed?
-- R3-E: automatic Choice-first grouping of Noul questions about the same field.
-- Cross-sense teaching with a deliberately noisy teacher: how do teacher errors propagate into learned bars?
-- R3-F redesigned: score from lattice state; an "unknown" requirement with no default; a 29-tool vs 6-tool surface.
-- Fragility-aware gates: require a second path automatically when the deciding reading is fragile.
+Next (round 5):
+- Make metamorphic validation the default acceptance test for compiled predicates; add a retry loop for Flash code generation, since only 40–60% of candidates compiled.
+- Production rollout of Choice-first grouping: run it automatically when a lattice has three or more Nouls touching the same field, guarded by the Noul validation.
+- Teacher error rates from calibration → automatic `tolerance` for cross-sense learning.
+- Curated tool profiles for agents (`profile: "gatekeeper"`, 6 tools) on both transports.
 
 Earlier "next" items:
 

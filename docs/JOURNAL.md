@@ -209,3 +209,62 @@ While round 3 was in progress, PR #1 was merged, and the gitpp-side agent posted
 
 **What it taught:**
 > **P20. Invite outside measurement, and treat it like your own: re-measure before adopting, then build the instrument it implies.** An independent question set exposed a framing error in our own headline number ("7% unreliable" really meant "unstable near the bar"), and it did so cheaply.
+
+---
+
+## Round 4 (v0.6)
+
+### 4.0 Planning
+**Inputs:** the five round-4 items from the research log, plus the user's request to think about production readiness, deployment and packaging.
+
+**Ordering decision:** start the slowest, MiniMax-heavy run (R4-D) first, in the background. Then the offline one (R4-C), then the experiments that only need fast calls. Interleaving kept the wall-clock time to about the length of the slowest experiment.
+
+### 4.1 R4-D: metamorphic validation
+**Design decision:** compile one candidate set and apply two acceptance tests to the same code. Letting each test retry with feedback would make the comparison about retry luck rather than acceptance.
+
+**A delegation choice:** MiniMax was asked for rewrites "using any syntactic variation the Redis config format allows", deliberately *without* listing the variations used by the shifted generator. Listing them would have leaked the test. Jev's agreement with the original filtered rewrites for meaning; all 40 passed.
+
+**Result:** metamorphic acceptance rejected every brittle predicate in both runs.
+
+**Operational issue found:** only 40–60% of Flash code generations compiled. This is a real cost: production use needs a retry loop, which goes in the round-5 queue.
+
+**A tooling mistake, repeated:** `pkill -f <pattern>` killed my own shell again. Fix: anchor process patterns to the command (`^node experiments/…`).
+
+### 4.2 R4-C: noisy teacher
+**Expected:** label noise would make learned bars too *permissive*. **Observed:** the opposite. The zero-disagreement rule converts noise into blocking.
+
+So I added the obvious knob (`tolerance`) and immediately hit its trap. With the real (error-free) Jev teacher, tolerance only admits the *student's* errors. The rule has to be "tolerance = the teacher's measured error rate", which ties the learning loop to the calibration bench.
+
+> **P21. Measure the teacher before you trust its labels, and set the learner's slack from that measurement.**
+
+### 4.3 R4-A: fragility-aware gates, a negative result kept
+I expected `require_firm` (fragile verdicts need corroboration) to improve reproducibility. It reduced it. The fragile/firm classification sits on its own noisy boundary, so the rule shifted the flip band from the bar to bar + band. The useful idea from the outside comment survives as **information** (`margin`, `fragile`), not as **policy**.
+
+> **P22. A deterministic rule on a noisy quantity creates a new noisy boundary.** Fix noise at its source (cache the reading), then use the signal for alerting.
+
+### 4.4 R4-E: the agent, measured properly
+Applying round 3's lessons (P19: score from state; truth with no default; a tempting balance) produced a clean, positive result: no overclaims in either arm. The tool-surface comparison then showed something round 3 only hinted at. A larger surface doesn't change the *decision*, but it changes the *record*: agents used extra proof sources to "refute" an unknowable requirement from absence of evidence. That matters for production: whatever an agent records becomes evidence for the next decision.
+
+### 4.5 R4-B: Choice-first grouping
+MiniMax's grouping came out sensible on the first try, including "not set" options and multi-question mappings (port 0 / port 6379 from one Choice; bind loopback / all from one Choice). Validation against Jev's own Nouls was the gate; it rejected the one mapping with too little confident data.
+
+### 4.6 Round 4 process lessons
+- P21 measure the teacher · P22 rules on noisy quantities move boundaries.
+- **Background the slow run first:** MiniMax-heavy experiments ran while three others were built and run.
+- **Keep negative results as tiles** (T38), so the next round doesn't rebuild the same rule.
+
+### 4.7 Production review: measure before planning
+**Decision:** before writing a production plan, measure the suspected risks: package contents, scaling, input handling. Three measurements changed the plan:
+1. **`npm pack` shipped 110 files and 826 kB**, including experiments, raw results and the journal. A `files` whitelist brought it to 36–40 product files and about 270 kB.
+2. **`consolidate()` was O(n²)–O(n³):** 3.6 s at 500 nodes, and 2,000 never finished. A spatial grid, a degree cap and batched merge remapping brought 500 nodes to 54 ms, and spread lattices became roughly linear (20k in 0.43 s). Clustered 20k still takes 37 s, so lattice size budgets went into P0.
+3. **MCP tool arguments were not validated:** `{text: 42}` leaked an internal error, and `question_spec: "nope"` silently created a default gate. A schema validator now checks every call.
+
+**Packaging decision: CLI and GitHub Action first, hosted edge last.**
+- The CI tier needs no service.
+- It fails closed.
+- It sends only the read files to the verifier.
+- Its steady-state cost is zero, because proofs on unchanged files are reused.
+
+The edge tier is technically ready but needs tenancy, quotas and an audit log before anyone outside the team uses it (PRODUCTION.md §4).
+
+> **P23. A production plan starts with measurements of the current system, not a feature list.** Three of the top-priority items came from measurements, not from reading the code.

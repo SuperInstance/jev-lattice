@@ -1,0 +1,263 @@
+{
+  "at": "2026-10-18T05:44:05.010Z",
+  "groups": [
+    {
+      "choice": {
+        "instructions": "What is the effective plaintext `port`?",
+        "criteria": {
+          "not_set": "No `port` directive is set, so the default effective port is 6379.",
+          "port_6379": "The effective `port` is explicitly set to 6379.",
+          "port_0": "The effective `port` is 0, disabling plaintext TCP.",
+          "other_port": "The effective `port` is a nonzero value other than 6379."
+        }
+      },
+      "derived": [
+        {
+          "q": "q0",
+          "allowed": [
+            "port_0"
+          ]
+        },
+        {
+          "q": "q9",
+          "allowed": [
+            "not_set",
+            "port_6379"
+          ]
+        }
+      ]
+    },
+    {
+      "choice": {
+        "instructions": "Is TLS enabled by the effective `tls-port` setting?",
+        "criteria": {
+          "not_set": "No `tls-port` directive is set, so the default tls-port is 0 and TLS is disabled.",
+          "tls_port_0": "`tls-port` is explicitly set to 0, so TLS is disabled.",
+          "tls_port_nonzero": "`tls-port` is set to a nonzero port, so TLS is enabled."
+        }
+      },
+      "derived": [
+        {
+          "q": "q1",
+          "allowed": [
+            "tls_port_nonzero"
+          ]
+        }
+      ]
+    },
+    {
+      "choice": {
+        "instructions": "Is AOF persistence enabled by the effective `appendonly` setting?",
+        "criteria": {
+          "not_set": "No `appendonly` directive is set, so the default is no.",
+          "appendonly_no": "`appendonly` is explicitly set to no.",
+          "appendonly_yes": "`appendonly` is explicitly set to yes."
+        }
+      },
+      "derived": [
+        {
+          "q": "q2",
+          "allowed": [
+            "appendonly_yes"
+          ]
+        }
+      ]
+    },
+    {
+      "choice": {
+        "instructions": "Is a nonzero effective `maxmemory` limit configured, and how large is it?",
+        "criteria": {
+          "not_set": "No `maxmemory` directive is set, so there is no effective memory limit.",
+          "maxmemory_0": "`maxmemory` is explicitly set to 0, so there is no effective memory limit.",
+          "maxmemory_below_1gb": "The effective `maxmemory` is greater than 0 but less than 1 GB (1,073,741,824 bytes).",
+          "maxmemory_at_least_1gb": "The effective `maxmemory` is at least 1 GB (1,073,741,824 bytes)."
+        }
+      },
+      "derived": [
+        {
+          "q": "q3",
+          "allowed": [
+            "maxmemory_below_1gb",
+            "maxmemory_at_least_1gb"
+          ]
+        },
+        {
+          "q": "q4",
+          "allowed": [
+            "maxmemory_at_least_1gb"
+          ]
+        }
+      ]
+    },
+    {
+      "choice": {
+        "instructions": "What is the effective `maxmemory-policy`?",
+        "criteria": {
+          "not_set": "No `maxmemory-policy` directive is set, so the default is `noeviction`.",
+          "noeviction": "The effective policy is explicitly `noeviction`.",
+          "other_policy": "The effective policy is any setting other than `noeviction`."
+        }
+      },
+      "derived": [
+        {
+          "q": "q5",
+          "allowed": [
+            "other_policy"
+          ]
+        }
+      ]
+    },
+    {
+      "choice": {
+        "instructions": "Is a usable password configured with `requirepass`?",
+        "criteria": {
+          "not_set": "No `requirepass` directive is set.",
+          "empty_password": "`requirepass` is present but has an empty value, so no usable password is configured.",
+          "nonempty_password": "`requirepass` is present and has a nonempty password."
+        }
+      },
+      "derived": [
+        {
+          "q": "q6",
+          "allowed": [
+            "nonempty_password"
+          ]
+        }
+      ]
+    },
+    {
+      "choice": {
+        "instructions": "What interface scope is effectively configured by `bind`?",
+        "criteria": {
+          "not_set": "No `bind` directive is present; under the standard Redis default, Redis listens on all interfaces.",
+          "loopback_only": "The effective bind set contains only loopback addresses, such as `127.0.0.1` and/or `::1`, with no non-loopback addresses.",
+          "all_interfaces": "The effective bind uses `0.0.0.0`, `*`, or an equivalent unrestricted wildcard, with no address exclusions.",
+          "other_bind_set": "The effective bind is another address set, such as specific non-loopback addresses, a mixture of loopback and non-loopback addresses, or a wildcard with exclusions."
+        }
+      },
+      "derived": [
+        {
+          "q": "q7",
+          "allowed": [
+            "loopback_only"
+          ]
+        },
+        {
+          "q": "q8",
+          "allowed": [
+            "not_set",
+            "all_interfaces"
+          ]
+        }
+      ]
+    }
+  ],
+  "accepted": {
+    "q0": {
+      "agree": 18,
+      "disagree": 0,
+      "ok": true
+    },
+    "q1": {
+      "agree": 20,
+      "disagree": 0,
+      "ok": true
+    },
+    "q2": {
+      "agree": 20,
+      "disagree": 0,
+      "ok": true
+    },
+    "q3": {
+      "agree": 13,
+      "disagree": 0,
+      "ok": true
+    },
+    "q4": {
+      "agree": 7,
+      "disagree": 0,
+      "ok": false
+    },
+    "q5": {
+      "agree": 15,
+      "disagree": 0,
+      "ok": true
+    },
+    "q6": {
+      "agree": 20,
+      "disagree": 0,
+      "ok": true
+    },
+    "q7": {
+      "agree": 18,
+      "disagree": 0,
+      "ok": true
+    },
+    "q8": {
+      "agree": 16,
+      "disagree": 0,
+      "ok": true
+    },
+    "q9": {
+      "agree": 11,
+      "disagree": 0,
+      "ok": true
+    }
+  },
+  "derived": {
+    "n": 360,
+    "brier": 0.0001,
+    "ece": 0.0015,
+    "gate": {
+      "0.8": {
+        "go": 173,
+        "wrongGo": 0,
+        "recall": 1
+      },
+      "0.9": {
+        "go": 173,
+        "wrongGo": 0,
+        "recall": 1
+      },
+      "0.95": {
+        "go": 172,
+        "wrongGo": 0,
+        "recall": 0.994
+      }
+    }
+  },
+  "nouls": {
+    "n": 360,
+    "brier": 0.0056,
+    "ece": 0.0374,
+    "gate": {
+      "0.8": {
+        "go": 172,
+        "wrongGo": 0,
+        "recall": 0.994
+      },
+      "0.9": {
+        "go": 167,
+        "wrongGo": 0,
+        "recall": 0.965
+      },
+      "0.95": {
+        "go": 146,
+        "wrongGo": 0,
+        "recall": 0.844
+      }
+    }
+  },
+  "choicesNeeded": 7,
+  "acceptedQs": [
+    "q0",
+    "q1",
+    "q2",
+    "q3",
+    "q5",
+    "q6",
+    "q7",
+    "q8",
+    "q9"
+  ]
+}

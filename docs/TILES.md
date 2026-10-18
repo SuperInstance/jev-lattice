@@ -39,6 +39,11 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T33 | Slice the state, lift the verdicts; convolve counts | `experiments/terraform-scale.mjs` | proven |
 | T34 | Margin + fragility on every verdict; stability probe | `evaluateGoNoGo` → `margin`, `fragile`; `stabilityProbe` | proven |
 | T35 | Put thresholds in the gaps of the verifier's score distribution | `experiments/fragility.mjs` | proven |
+| T36 | Metamorphic acceptance for compiled code | `experiments/metamorphic.mjs` | proven (2 runs) |
+| T37 | Noise fails safe; tolerance = the teacher's measured error rate | `learnThreshold({tolerance})` | proven (offline) |
+| T38 | A gate rule on a noisy boundary moves the boundary | `require_firm` (opt-in) | negative result |
+| T39 | Curated tool surface for agents | `experiments/agent-v2.mjs` | proven (edge) |
+| T40 | Automatic Choice-first grouping, validated by Nouls | `experiments/choice-grouping.mjs` | proven |
 
 ---
 
@@ -161,3 +166,18 @@ Every gate result carries `margin` (the deciding reading's distance from its bar
 
 ### T35: Put thresholds in the gaps
 A verifier's readings cluster (Jev: about 0.95–0.99 for yes, 0.01–0.06 for no). A threshold placed inside a cluster makes many verdicts fragile: at 0.95, 42 of 160 gates were within 0.02 of the bar, against 6 at 0.9. Look at the score histogram and put the bar in a sparse region.
+
+### T36: Metamorphic acceptance for compiled code
+Before accepting a predicate, also test it on **meaning-preserving rewrites** of the training inputs. MiniMax writes the rewrites, and Jev confirms each one means the same as its original. In both runs this rejected exactly the brittle predicates: those accepted by plain validation produced 5–8 errors after a format shift, and those accepted metamorphically produced 0. The rewriter was never told what the shift would be.
+
+### T37: Noise fails safe; tolerance = the teacher's measured error rate
+The zero-disagreement learning rule turns teacher noise into conservatism (bars blocked, 0 wrong GOs), not danger. To recover liveness, allow a disagreement rate equal to the teacher's **measured** error rate, and no more: any extra tolerance admits the student's own errors.
+
+### T38: A gate rule on a noisy boundary moves the boundary
+Holding fragile verdicts OPEN until corroborated made gates *less* reproducible, because fragility itself flips near bar + band. Reproducibility comes from caching the evidence-to-reading map, not from more gate rules. Keep `fragile` as an alert; `require_firm` is opt-in.
+
+### T39: Curated tool surface for agents
+With the same agent and prompt, 6 tools instead of 23 meant 33% fewer calls, and the unknowable gate stayed OPEN instead of being "refuted" from absence of evidence (7/8 vs 3/8). Every extra proof source is one more way to manufacture confidence.
+
+### T40: Automatic Choice-first grouping
+MiniMax proposes field-level Choice questions with mappings to the existing yes/no questions. Each mapping is accepted only if it agrees with Jev's Nouls on training data. Accepted mappings beat the Nouls on held-out data (Brier 0.0001 vs 0.0056, recall 1.00 vs 0.965) with 0 wrong.
