@@ -57,15 +57,23 @@ runs:
         code=$?
         echo "pass=$([ $code -eq 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         echo "code=$code" >> "$GITHUB_OUTPUT"
+        # Re-raise the verifier's status so this STEP fails. `set +e` (above, needed to capture
+        # $? and write the outputs) plus the trailing echo otherwise leaves the step exiting 0,
+        # so steps.gate.outcome is `success` even when a gate is REFUTED -- and an outcome-based
+        # gate can then never fire.
+        exit $code
     - name: Save lattice state
       if: always()
       uses: actions/cache/save@v4
       with:
         path: ${{ inputs.state-path }}
         key: jev-state-${{ github.ref_name }}-${{ github.run_id }}
+    # Keyed on the step's OUTCOME, not on an output string. A step that was skipped or cancelled
+    # publishes no outputs, so `steps.gate.outputs.code` is null -- and null coerces to 0, which
+    # made `!= '0'` false and waved a gate that never ran through as a pass.
     - name: Fail when gates are not GO
-      if: steps.gate.outputs.code != '0'
+      if: steps.gate.outcome != 'success'
       shell: bash
       run: |
-        echo "::error::JEV gates are not all GO (exit ${{ steps.gate.outputs.code }}); see the job summary"
+        echo "::error::JEV gates are not all GO (outcome=${{ steps.gate.outcome }}, exit=${{ steps.gate.outputs.code }}); see the job summary"
         exit 1
