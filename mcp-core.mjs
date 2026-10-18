@@ -86,6 +86,17 @@ export function validateArgs(schema, value, path = "arguments") {
   return null;
 }
 
+/**
+ * Curated tool profiles (T39). An agent given 6 tools instead of 23 made 33% fewer calls
+ * and stopped "refuting" unknowable requirements from absence of evidence.
+ */
+export const PROFILES = {
+  gatekeeper: ["jev_ingest", "jev_verify_files", "jev_verify_open", "jev_evaluate_go_no_go", "jev_list_nodes", "jev_get_node"],
+  reader: ["jev_evaluate_go_no_go", "jev_list_nodes", "jev_get_node", "jev_query", "jev_stats", "jev_export_state", "jev_audit"]
+};
+
+export const isMutating = name => MUTATING.has(name);
+
 const MUTATING = new Set([
   "jev_ingest", "jev_add_proof", "jev_invalidate_proof", "jev_consolidate", "jev_import_state",
   "jev_boost", "jev_prune", "jev_verify", "jev_verify_open", "jev_minimax_proof", "jev_decompose",
@@ -188,13 +199,27 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
  * @param {() => object} [o.consolidateOpts]
  * @param {() => Promise<void>|void} [o.persist] called after mutating tools
  */
-export function createMcp({ lattice, jev = null, mm = null, small = null, predicates = null, senses = null, capacity = null, consolidateOpts = () => ({}), persist = null }) {
+export function createMcp({
+  lattice, jev = null, mm = null, small = null, predicates = null, senses = null, capacity = null,
+  consolidateOpts = () => ({}), persist = null,
+  profile = null,        // default tool profile (PROFILES key) for every request
+  extraTools = []        // [{ def, handler(args) , mutating? }] host-specific tools (e.g. audit)
+}) {
   const tools = createToolRegistry(lattice);
-  const defs = toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small, hasPredicates: !!predicates, hasSenses: !!senses });
+  const defs = [...toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small, hasPredicates: !!predicates, hasSenses: !!senses }), ...extraTools.map(t => t.def)];
+  const extra = new Map(extraTools.map(t => [t.def.name, t]));
+  for (const t of extraTools) if (t.mutating) MUTATING.add(t.def.name);
   const names = new Set(defs.map(d => d.name));
+  /** Tools visible for this request: profile ∩ allow(). */
+  const visible = (ctx = {}) => {
+    const prof = ctx.profile ?? profile;
+    const inProfile = prof && PROFILES[prof] ? new Set(PROFILES[prof]) : null;
+    return defs.filter(d => (!inProfile || inProfile.has(d.name)) && (!ctx.allow || ctx.allow(d.name) === true));
+  };
 
   async function callTool(name, args = {}) {
     if (!names.has(name)) return { ok: false, error: `unknown tool: ${name}` };
+    if (extra.has(name)) return extra.get(name).handler(args);
     switch (name) {
       case "jev_ingest": return tools.ingest(args);
       case "jev_add_proof": return tools.addProof({ id: args.id, proof: args.proof });
@@ -241,7 +266,10 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
   const fail = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
 
   /** Handle one JSON-RPC message. Returns a response object, or null for notifications. */
-  async function handle(msg) {
+  /**
+   * ctx (optional, per request): { allow(name) → true | "reason", guard(name, args) → null | "reason", profile }
+   */
+  async function handle(msg, ctx = {}) {
     if (!msg || typeof msg !== "object" || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
       return fail(msg?.id ?? null, -32600, "Invalid Request");
     }
@@ -261,16 +289,26 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
         });
       }
       case "ping": return ok(msg.id, {});
-      case "tools/list": return ok(msg.id, { tools: defs });
+      case "tools/list": return ok(msg.id, { tools: visible(ctx) });
       case "tools/call": {
         const name = msg.params?.name;
         if (!names.has(name)) return fail(msg.id, -32602, `Unknown tool: ${name}`);
         const args = msg.params?.arguments ?? {};
+        const refuse = reason => {
+          const result = { ok: false, error: reason };
+          return ok(msg.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result, isError: true });
+        };
+        if (!visible(ctx).some(d => d.name === name)) {
+          const why = ctx.allow ? ctx.allow(name) : true;
+          return refuse(why === true ? `forbidden: ${name} is not in the "${ctx.profile ?? profile}" tool profile` : `forbidden: ${why}`);
+        }
         const invalid = validateArgs(defs.find(d => d.name === name).inputSchema, args);
         if (invalid) {
           const result = { ok: false, error: `invalid arguments — ${invalid}` };
           return ok(msg.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result, isError: true });
         }
+        const blocked = ctx.guard ? await ctx.guard(name, args) : null;
+        if (blocked) return refuse(blocked);
         try {
           const result = await callTool(name, args);
           if (MUTATING.has(name) && persist && result?.ok !== false) await persist();
@@ -288,5 +326,5 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
     }
   }
 
-  return { handle, callTool, defs };
+  return { handle, callTool, defs, visible };
 }

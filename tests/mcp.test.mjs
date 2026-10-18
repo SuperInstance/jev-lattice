@@ -124,3 +124,25 @@ test("tool arguments are validated against inputSchema before dispatch", async (
   assert.equal((await callTool("jev_ingest", { text: "fine", question_spec: { confidence_threshold: 0.9 } })).result.isError, false);
   assert.equal(validateArgs({ type: ["string", "object"] }, { a: 1 }), null, "union types");
 });
+
+test("profiles, per-request allow/guard and extra tools", async () => {
+  const { createMcp, PROFILES } = await import("../mcp-core.mjs");
+  const { JEVLattice } = await import("../jev-core.js");
+  const fakeJev = { model: "f", async nouls(s, items) { const o = { _model: "f" }; for (const it of items) o[it.key] = { p: 0.99 }; return o; }, async noul() { return { p: 0.99 }; } };
+  let audited = 0;
+  const m = createMcp({
+    lattice: new JEVLattice(), jev: fakeJev,
+    extraTools: [{ def: { name: "jev_audit", description: "audit", inputSchema: { type: "object", properties: {} } }, handler: () => ({ ok: true, rows: ++audited }) }]
+  });
+  const list = async ctx => (await m.handle({ jsonrpc: "2.0", id: 1, method: "tools/list" }, ctx)).result.tools.map(t => t.name);
+  const call = (name, args, ctx) => m.handle({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name, arguments: args } }, ctx);
+  assert.deepEqual((await list({ profile: "gatekeeper" })).sort(), [...PROFILES.gatekeeper].sort());
+  assert.ok((await list({})).includes("jev_audit"));
+  const r = await call("jev_import_state", { state: {} }, { profile: "gatekeeper" });
+  assert.match(r.result.structuredContent.error, /not in the "gatekeeper" tool profile/);
+  const readOnly = { allow: n => (n === "jev_list_nodes" ? true : "needs scope verify") };
+  assert.match((await call("jev_ingest", { text: "x" }, readOnly)).result.structuredContent.error, /forbidden: needs scope verify/);
+  const capped = { guard: n => (n === "jev_ingest" ? "quota: max_nodes reached" : null) };
+  assert.match((await call("jev_ingest", { text: "x" }, capped)).result.structuredContent.error, /quota/);
+  assert.equal((await call("jev_audit", {})).result.structuredContent.rows, 1);
+});

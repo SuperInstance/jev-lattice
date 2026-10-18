@@ -56,13 +56,27 @@ export function createMiniMax({
   baseUrl = DEFAULT_BASE,
   fetchImpl = globalThis.fetch,
   maxRetries = 3,
+  // tried in order when the server rejects a model id (status 2013): preview ids come and go
+  fallbackModels = [MINIMAX_THINK_MODEL],
   // long generations (code, documents) can exceed 180 s; MINIMAX_TIMEOUT_MS overrides everywhere
   timeoutMs = Number(globalThis.process?.env?.MINIMAX_TIMEOUT_MS) || 180000
 } = {}) {
   if (!apiKey) throw new Error("MiniMax: missing api key (MINIMAX_TOKEN)");
   const usage = { calls: 0, prompt_tokens: 0, completion_tokens: 0 };
 
-  async function chat(messages, { model: m = model, maxTokens = 4096, temperature = 0.3 } = {}) {
+  async function chat(messages, opts = {}) {
+    const chain = [opts.model || model, ...fallbackModels.filter(f => f !== (opts.model || model))];
+    for (let i = 0; ; i++) {
+      try {
+        return await chatOnce(messages, { ...opts, model: chain[i] });
+      } catch (e) {
+        if (e.code !== 2013 || i + 1 >= chain.length) throw e;
+        usage.fallbacks = (usage.fallbacks || 0) + 1;
+      }
+    }
+  }
+
+  async function chatOnce(messages, { model: m = model, maxTokens = 4096, temperature = 0.3 } = {}) {
     if (typeof messages === "string") messages = [{ role: "user", content: messages }];
     let lastErr;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -84,7 +98,7 @@ export function createMiniMax({
           continue;
         }
         if (!res.ok || (code && code !== 0)) {
-          throw new Error(`MiniMax error ${res.status}/${code}: ${data?.base_resp?.status_msg || JSON.stringify(data).slice(0, 300)}`);
+          throw Object.assign(new Error(`MiniMax error ${res.status}/${code}: ${data?.base_resp?.status_msg || JSON.stringify(data).slice(0, 300)}`), { code });
         }
         const msg = data.choices?.[0]?.message || {};
         usage.calls++;

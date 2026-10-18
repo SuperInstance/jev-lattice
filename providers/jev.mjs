@@ -21,7 +21,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export function createJev({
   apiKey = globalThis.process?.env?.TYPESAFE_AI_TOKEN,
-  model = JEV_DEFAULT_MODEL,
+  model = globalThis.process?.env?.JEV_MODEL || JEV_DEFAULT_MODEL, // pin in production, e.g. jev-1.13.0
   baseUrl = DEFAULT_BASE,
   fetchImpl = globalThis.fetch,
   maxRetries = 4,

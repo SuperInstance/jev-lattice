@@ -9,20 +9,26 @@
  *   Workers AI       on-edge SMALL_MODEL proof path (jev_edge_proof)
  *   Worker Loader    compiled predicates in sandboxed Dynamic Worker isolates (jev_predicate_*)
  *
- * Routes (lattice name defaults to "default"):
- *   POST /mcp[/:name]                 MCP Streamable HTTP (JSON responses)
- *   GET  /api/:name/stats             stats
- *   GET  /api/:name/state             export
- *   PUT  /api/:name/state             import
- *   POST /api/:name/tool/:tool        call one MCP tool with a JSON body
- *   PUT  /api/:name/auto-verify       store a Jev `state` the idle cycle re-verifies against
- *   POST /api/:name/idle              run the idle cycle now
+ * Routes (lattice name defaults to "default"); [scope] each route needs:
+ *   POST /mcp[/:name]                 MCP Streamable HTTP (JSON responses)   [per tool]
+ *   GET  /api/:name/stats             stats                                  [read]
+ *   GET  /api/:name/state             export                                 [read]
+ *   PUT  /api/:name/state             import                                 [admin]
+ *   POST /api/:name/tool/:tool        call one MCP tool with a JSON body     [per tool]
+ *   GET  /api/:name/audit             verdict-change log (?limit, ?node)     [read]
+ *   GET  /api/:name/settings          providers, profile, quotas             [read]
+ *   PUT  /api/:name/settings                                                 [admin]
+ *   PUT  /api/:name/auto-verify       store a Jev `state` the idle cycle re-verifies against [admin]
+ *   POST /api/:name/idle              run the idle cycle now                 [admin]
+ *   POST /admin/keys | GET /admin/keys | DELETE /admin/keys/:id              [root only]
  *   GET  /health
- * All /mcp and /api routes require `Authorization: Bearer $JEV_API_KEY`.
+ * /mcp, /api and /admin require `Authorization: Bearer <key>`: the root JEV_API_KEY or a
+ * tenant key issued by /admin/keys (worker/control.mjs).
  */
 import { DurableObject } from "cloudflare:workers";
 import { JEVLattice } from "../jev-core.js";
-import { createMcp, SERVER_INFO } from "../mcp-core.mjs";
+import { createMcp, SERVER_INFO, isMutating } from "../mcp-core.mjs";
+import { authenticate, canAccessLattice, hasScope, toolScope, rateLimit, createKey, listKeys, revokeKey, PROVIDERS, defaultSettings, mergeSettings } from "./control.mjs";
 import { createJev } from "../providers/jev.mjs";
 import { createMiniMax, MINIMAX_FAST_MODEL } from "../providers/minimax.mjs";
 import { createWorkersAI } from "../providers/workers-ai.mjs";
@@ -38,42 +44,143 @@ const NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 const json = (body, status = 200, headers = {}) =>
   new Response(JSON.stringify(body, null, 2), { status, headers: { "content-type": "application/json", ...headers } });
 
-function timingSafeEqual(a, b) {
-  const enc = new TextEncoder();
-  const x = enc.encode(a), y = enc.encode(b);
-  if (x.length !== y.length) return false;
-  let d = 0;
-  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i];
-  return d === 0;
-}
-
-function authorized(req, env) {
-  if (!env.JEV_API_KEY) return false; // fail closed: no key configured → no access
-  const h = req.headers.get("authorization") || "";
-  const tok = h.startsWith("Bearer ") ? h.slice(7) : "";
-  return timingSafeEqual(tok, env.JEV_API_KEY);
-}
+const ROOT = { id: "root", tenant: "root", scopes: ["admin"], lattices: ["*"], profile: null, root: true };
+const NODE_TOOLS = new Set(["jev_ingest", "jev_decompose"]);
+const PROOF_TOOLS = new Set(["jev_add_proof", "jev_verify", "jev_minimax_proof", "jev_edge_proof", "jev_predicate_proof",
+  "jev_verify_open", "jev_verify_files", "jev_compile", "jev_rollup", "jev_sense_probe"]);
+const AUDIT_KEEP = 10000;
 
 export class LatticeDO extends DurableObject {
   constructor(ctx, env) {
     super(ctx, env);
+    this.env = env;
     this.lattice = new JEVLattice();
     this.saved = new Map(); // node id → last persisted JSON, for diff writes
-    this.ctx.blockConcurrencyWhile(() => this.load());
+    this.settings = defaultSettings(env);
+    // audit log: one row per mutating call, with the verdicts it changed
+    ctx.storage.sql.exec(`CREATE TABLE IF NOT EXISTS audit (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, tool TEXT NOT NULL,
+      ok INTEGER NOT NULL, changes TEXT NOT NULL, new_proofs INTEGER NOT NULL)`);
+    this.ctx.blockConcurrencyWhile(async () => {
+      this.settings = { ...this.settings, ...((await this.ctx.storage.get("settings")) || {}) };
+      await this.load();
+      this.buildMcp();
+    });
+  }
 
-    // Jev answers cached in this lattice's own DO storage, keyed by (state hash, question)
+  /** Providers are per-lattice settings (default: TypeSafe only) — a tenant opts in to the rest. */
+  buildMcp() {
+    const { env, ctx } = this;
+    const on = p => this.settings.providers.includes(p);
+    // Jev answers cached in this lattice's own DO storage, keyed by (model, state hash, question)
     const ttlMs = Number(env.JEV_CACHE_TTL_MS) || 24 * 3600 * 1000;
-    const jev = env.TYPESAFE_AI_TOKEN
-      ? cachedJev(createJev({ apiKey: env.TYPESAFE_AI_TOKEN }), createProofCache({ store: durableObjectStore(ctx.storage), ttlMs }))
+    const jev = on("typesafe") && env.TYPESAFE_AI_TOKEN
+      ? cachedJev(createJev({ apiKey: env.TYPESAFE_AI_TOKEN, ...(env.JEV_MODEL ? { model: env.JEV_MODEL } : {}) }),
+          createProofCache({ store: durableObjectStore(ctx.storage), ttlMs }))
       : null;
-    const mm = env.MINIMAX_TOKEN ? createMiniMax({ apiKey: env.MINIMAX_TOKEN, model: env.MINIMAX_MODEL || MINIMAX_FAST_MODEL }) : null;
-    const small = env.AI ? createWorkersAI(env.AI, env.WORKERS_AI_MODEL ? { model: env.WORKERS_AI_MODEL } : {}) : null;
+    const mm = on("minimax") && env.MINIMAX_TOKEN ? createMiniMax({ apiKey: env.MINIMAX_TOKEN, model: env.MINIMAX_MODEL || MINIMAX_FAST_MODEL }) : null;
+    const small = on("workers-ai") && env.AI ? createWorkersAI(env.AI, env.WORKERS_AI_MODEL ? { model: env.WORKERS_AI_MODEL } : {}) : null;
     this.jev = jev;
     // Dynamic Workers sandbox for compiled predicates (open beta; absent binding → tools hidden)
-    const predicates = env.LOADER ? createEdgePredicates({ loader: env.LOADER, storage: ctx.storage }) : null;
+    const predicates = on("predicates") && env.LOADER ? createEdgePredicates({ loader: env.LOADER, storage: ctx.storage }) : null;
     // cross-sense teaching: label bank + paraphrase cache live in this lattice's DO storage
     const senses = jev ? createSenseSuite({ jev, mm, small, predicates, store: durableObjectStore(ctx.storage, "sense:"), rules: env.JEV_READING_RULES || null }) : null;
-    this.mcp = createMcp({ lattice: this.lattice, jev, mm, small, predicates, senses, persist: () => this.persist() });
+    const extraTools = [
+      {
+        def: { name: "jev_audit", description: "Verdict-change log for this lattice: who called which mutating tool, and which gates it moved.",
+          inputSchema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 500 }, node: { type: "string" } } } },
+        handler: args => this.auditLog(args)
+      },
+      {
+        def: { name: "jev_settings", description: "This lattice's settings: enabled providers, default tool profile, quotas.",
+          inputSchema: { type: "object", properties: {} } },
+        handler: () => ({ ok: true, settings: this.settings, model: jev?.model ?? null })
+      }
+    ];
+    this.mcp = createMcp({ lattice: this.lattice, jev, mm, small, predicates, senses, extraTools, persist: () => this.persist() });
+  }
+
+  ctxFor(principal = ROOT) {
+    return {
+      allow: n => hasScope(principal, toolScope(n)) || `${n} needs scope "${toolScope(n)}"`,
+      guard: (n, args) => this.quota(n, args),
+      profile: principal.profile ?? this.settings.profile
+    };
+  }
+
+  quota(name, args = {}) {
+    const s = this.settings;
+    const nodes = this.lattice.nodes.size;
+    if (NODE_TOOLS.has(name) && nodes >= s.max_nodes) return `quota: lattice has ${nodes} nodes (max_nodes ${s.max_nodes}); prune first`;
+    if (name === "jev_import_state" && (args.state?.nodes?.length || 0) > s.max_nodes) return `quota: import has ${args.state.nodes.length} nodes (max_nodes ${s.max_nodes})`;
+    if (PROOF_TOOLS.has(name)) {
+      let total = 0;
+      for (const n of this.lattice.nodes.values()) total += n.active_proofs?.length || 0;
+      if (total >= s.max_proofs) return `quota: lattice holds ${total} proofs (max_proofs ${s.max_proofs}); prune or re-import a compacted state`;
+      const n = args.id ? this.lattice.getNode(args.id) : null;
+      if (n && (n.active_proofs?.length || 0) >= s.max_proofs_per_node) return `quota: node ${args.id} has ${n.active_proofs.length} proofs (max_proofs_per_node ${s.max_proofs_per_node})`;
+    }
+    return null;
+  }
+
+  /** question id → { verdict, proofs } */
+  snapshot() {
+    const m = new Map();
+    for (const n of this.lattice.nodes.values()) {
+      if (n.node_type !== "QUESTION") continue;
+      const g = this.lattice.evaluateGoNoGo(n.id);
+      m.set(n.id, { verdict: g.verdict, margin: g.margin, proofs: n.active_proofs?.length || 0 });
+    }
+    return m;
+  }
+
+  /** Run a mutation and record which verdicts it moved, with the proofs that moved them. */
+  async audited(actor, tool, fn, okOf = r => r?.ok !== false) {
+    const before = this.snapshot();
+    const r = await fn();
+    const after = this.snapshot();
+    const changes = [];
+    let newProofs = 0;
+    for (const id of new Set([...before.keys(), ...after.keys()])) {
+      const b = before.get(id), a = after.get(id);
+      const added = Math.max(0, (a?.proofs || 0) - (b?.proofs || 0));
+      newProofs += added;
+      if (b?.verdict === a?.verdict) continue;
+      const node = this.lattice.getNode(id);
+      changes.push({
+        id, text: node?.text?.slice(0, 120) ?? null, from: b?.verdict ?? null, to: a?.verdict ?? null, margin: a?.margin ?? null,
+        proofs: added && node ? node.active_proofs.slice(-added).map(p => ({ proof_id: p.proof_id, source_type: p.source_type, confidence: p.confidence })) : []
+      });
+    }
+    const sql = this.ctx.storage.sql;
+    sql.exec("INSERT INTO audit (at, actor, tool, ok, changes, new_proofs) VALUES (?, ?, ?, ?, ?, ?)",
+      new Date().toISOString(), actor, tool, okOf(r) ? 1 : 0, JSON.stringify(changes), newProofs);
+    sql.exec("DELETE FROM audit WHERE seq <= (SELECT MAX(seq) FROM audit) - ?", AUDIT_KEEP);
+    return r;
+  }
+
+  auditLog({ limit = 50, node = null } = {}) {
+    limit = Math.min(Math.max(1, Number(limit) || 50), 500);
+    const rows = node
+      ? this.ctx.storage.sql.exec("SELECT * FROM audit WHERE changes LIKE ? ORDER BY seq DESC LIMIT ?", `%"id":${JSON.stringify(String(node))}%`, limit).toArray()
+      : this.ctx.storage.sql.exec("SELECT * FROM audit ORDER BY seq DESC LIMIT ?", limit).toArray();
+    return { ok: true, entries: rows.map(r => ({ ...r, ok: !!r.ok, changes: JSON.parse(r.changes) })) };
+  }
+
+  async getSettings() {
+    return { ok: true, settings: this.settings, providers_available: PROVIDERS, model: this.jev?.model ?? null };
+  }
+
+  async putSettings(patch, principal = ROOT) {
+    const m = mergeSettings(this.settings, patch);
+    if (!m.ok) return m;
+    await this.audited(principal.id, "settings", async () => {
+      this.settings = m.settings;
+      await this.ctx.storage.put("settings", this.settings);
+      this.buildMcp();
+      return { ok: true };
+    });
+    return this.getSettings();
   }
 
   async load() {
@@ -112,11 +219,13 @@ export class LatticeDO extends DurableObject {
     let verified = null;
     const auto = await this.ctx.storage.get("auto_verify_state");
     if (auto && this.jev && consolidate.seekingVerification > 0) {
-      try {
-        verified = await verifyOpenGates(this.lattice, { jev: this.jev, state: auto, channel: AUTO_CHANNEL });
-      } catch (e) {
-        verified = { ok: false, error: e.message };
-      }
+      verified = await this.audited("system:idle", "verify_open", async () => {
+        try {
+          return await verifyOpenGates(this.lattice, { jev: this.jev, state: auto, channel: AUTO_CHANNEL });
+        } catch (e) {
+          return { ok: false, error: e.message };
+        }
+      });
     }
     const cachePruned = await this.pruneCache();
     await this.ctx.storage.put("last_idle_cycle", { at: new Date().toISOString(), consolidate, verified, cachePruned });
@@ -139,12 +248,17 @@ export class LatticeDO extends DurableObject {
     return { ok: true, ...(await this.ctx.storage.get("last_idle_cycle")) };
   }
 
-  async rpc(msg) {
-    return this.mcp.handle(msg);
+  async rpc(msg, principal = ROOT) {
+    const ctx = this.ctxFor(principal);
+    const name = msg?.method === "tools/call" ? msg.params?.name : null;
+    if (name && isMutating(name) && ctx.allow(name) === true) {
+      return this.audited(principal.id, name, () => this.mcp.handle(msg, ctx), r => !r?.error && !r?.result?.isError);
+    }
+    return this.mcp.handle(msg, ctx);
   }
 
-  async tool(name, args) {
-    const r = await this.mcp.handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } });
+  async tool(name, args, principal = ROOT) {
+    const r = await this.rpc({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } }, principal);
     return r.error ? { ok: false, error: r.error.message } : r.result.structuredContent ?? { ok: false, error: r.result.content?.[0]?.text };
   }
 
@@ -153,7 +267,11 @@ export class LatticeDO extends DurableObject {
    * content (by state hash) and immediately re-verifies the gates that reopened —
    * unchanged questions are served from the proof cache.
    */
-  async setAutoVerify(state) {
+  async setAutoVerify(state, principal = ROOT) {
+    return this.audited(principal.id, "auto_verify", () => this._setAutoVerify(state));
+  }
+
+  async _setAutoVerify(state) {
     if (state === null) {
       await this.ctx.storage.delete("auto_verify_state");
       return { ok: true, auto_verify: false };
@@ -166,11 +284,13 @@ export class LatticeDO extends DurableObject {
     return { ok: true, auto_verify: true, drift, verified };
   }
 
-  async info() {
+  async info(principal = ROOT) {
     return {
       ok: true,
       stats: this.lattice.stats(),
-      tools: this.mcp.defs.map(d => d.name),
+      tools: this.mcp.visible(this.ctxFor(principal)).map(d => d.name),
+      settings: this.settings,
+      model: this.jev?.model ?? null,
       last_idle_cycle: (await this.ctx.storage.get("last_idle_cycle")) || null,
       auto_verify: !!(await this.ctx.storage.get("auto_verify_state")),
       proof_cache: this.jev?.cache ? { ...this.jev.cache.stats, ttlMs: this.jev.cache.ttlMs } : null
@@ -178,7 +298,7 @@ export class LatticeDO extends DurableObject {
   }
 }
 
-async function handleMcp(req, stub) {
+async function handleMcp(req, stub, principal) {
   if (req.method === "GET") return new Response("SSE stream not offered; POST JSON-RPC instead", { status: 405, headers: { allow: "POST" } });
   if (req.method === "DELETE") return new Response(null, { status: 204 });
   if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
@@ -191,11 +311,30 @@ async function handleMcp(req, stub) {
   const msgs = Array.isArray(body) ? body : [body];
   const out = [];
   for (const m of msgs) {
-    const r = await stub.rpc(m);
+    const r = await stub.rpc(m, principal);
     if (r) out.push(r);
   }
   if (out.length === 0) return new Response(null, { status: 202 });
   return json(Array.isArray(body) ? out : out[0]);
+}
+
+const result = r => json(r, r?.ok === false ? (/^forbidden/.test(r.error || "") ? 403 : /^quota/.test(r.error || "") ? 429 : 400) : 200);
+
+/** Key management: root only. */
+async function handleAdmin(req, env, principal, parts) {
+  if (!principal.root) return json({ ok: false, error: "forbidden: key management needs the root key" }, 403);
+  if (!env.CONTROL) return json({ ok: false, error: "no CONTROL D1 binding configured" }, 501);
+  if (parts[1] !== "keys") return json({ ok: false, error: "not found" }, 404);
+  if (req.method === "POST" && !parts[2]) {
+    const r = await createKey(env, (await req.json().catch(() => null)) || {});
+    return json(r, r.ok ? 201 : 400);
+  }
+  if (req.method === "GET" && !parts[2]) return json(await listKeys(env));
+  if (req.method === "DELETE" && parts[2]) {
+    const r = await revokeKey(env, parts[2]);
+    return json(r, r.ok ? 200 : 404);
+  }
+  return json({ ok: false, error: "not found" }, 404);
 }
 
 export default {
@@ -206,29 +345,40 @@ export default {
     if (url.pathname === "/health") return json({ ok: true, server: SERVER_INFO });
     if (url.pathname === "/") return Response.redirect(new URL("/browser/", url).href, 302);
 
-    if (parts[0] === "mcp" || parts[0] === "api") {
-      if (!authorized(req, env)) return json({ ok: false, error: "unauthorized" }, 401, { "www-authenticate": "Bearer" });
+    if (parts[0] === "mcp" || parts[0] === "api" || parts[0] === "admin") {
+      const auth = await authenticate(req, env);
+      if (!auth.ok) return json({ ok: false, error: auth.error }, auth.status, { "www-authenticate": "Bearer" });
+      const principal = auth.principal;
       // bound request size before parsing (states and file maps can be large, but not unbounded)
       const max = Number(env.JEV_MAX_BODY_BYTES) || 4 * 1024 * 1024;
       if (Number(req.headers.get("content-length") || 0) > max) return json({ ok: false, error: `request body exceeds ${max} bytes` }, 413);
+
+      if (parts[0] === "admin") return handleAdmin(req, env, principal, parts);
+
       const name = parts[0] === "mcp" ? parts[1] || "default" : parts[1];
       if (!name || !NAME_RE.test(name)) return json({ ok: false, error: "bad lattice name" }, 400);
+      if (!canAccessLattice(principal, name)) return json({ ok: false, error: `this key cannot access lattice "${name}"` }, 403);
+      const limited = await rateLimit(env, principal);
+      if (!limited.ok) return json({ ok: false, error: limited.error }, 429, { "retry-after": "60" });
       const stub = env.LATTICE.get(env.LATTICE.idFromName(name));
 
-      if (parts[0] === "mcp") return handleMcp(req, stub);
+      if (parts[0] === "mcp") return handleMcp(req, stub, principal);
 
       const [, , kind, arg] = parts;
-      if (kind === "stats" && req.method === "GET") return json(await stub.info());
-      if (kind === "state" && req.method === "GET") return json(await stub.tool("jev_export_state", {}));
-      if (kind === "state" && req.method === "PUT") return json(await stub.tool("jev_import_state", { state: await req.json() }));
-      if (kind === "auto-verify" && req.method === "PUT") return json(await stub.setAutoVerify(await req.json()));
-      if (kind === "auto-verify" && req.method === "DELETE") return json(await stub.setAutoVerify(null));
-      if (kind === "idle" && req.method === "POST") return json(await stub.runIdleCycle());
-      if (kind === "tool" && arg && req.method === "POST") {
-        const args = await req.json().catch(() => ({}));
-        const r = await stub.tool(arg, args);
-        return json(r, r?.ok === false ? 400 : 200);
+      const need = scope => (hasScope(principal, scope) ? null : json({ ok: false, error: `forbidden: needs scope "${scope}"` }, 403));
+      const body = async () => req.json().catch(() => undefined);
+      if (kind === "stats" && req.method === "GET") return need("read") || json(await stub.info(principal));
+      if (kind === "state" && req.method === "GET") return json(await stub.tool("jev_export_state", {}, principal));
+      if (kind === "state" && req.method === "PUT") return result(await stub.tool("jev_import_state", { state: await body() }, principal));
+      if (kind === "audit" && req.method === "GET") {
+        return result(await stub.tool("jev_audit", { limit: Number(url.searchParams.get("limit")) || 50, ...(url.searchParams.get("node") ? { node: url.searchParams.get("node") } : {}) }, principal));
       }
+      if (kind === "settings" && req.method === "GET") return need("read") || json(await stub.getSettings());
+      if (kind === "settings" && req.method === "PUT") return need("admin") || result(await stub.putSettings(await body(), principal));
+      if (kind === "auto-verify" && req.method === "PUT") return need("admin") || json(await stub.setAutoVerify(await body(), principal));
+      if (kind === "auto-verify" && req.method === "DELETE") return need("admin") || json(await stub.setAutoVerify(null, principal));
+      if (kind === "idle" && req.method === "POST") return need("admin") || json(await stub.runIdleCycle());
+      if (kind === "tool" && arg && req.method === "POST") return result(await stub.tool(arg, (await body()) ?? {}, principal));
       return json({ ok: false, error: "not found" }, 404);
     }
     return env.ASSETS.fetch(req);
