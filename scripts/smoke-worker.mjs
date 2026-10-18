@@ -52,8 +52,12 @@ check(st.nodes?.length === 1, "REST export state (persisted in Durable Object)")
 if (live) {
   const state = { "redis.conf": "port 0\ntls-port 6380" };
   if (tools.includes("jev_verify")) {
-    const v = await call("jev_verify", { id, state });
+    const v = await call("jev_verify", { id, state, channel: "redis.conf" });
     check(v.ok && v.gate?.verdict === "GO", "Jev verify closes gate at the edge", `p=${v.p}`);
+    const again = await call("jev_verify", { id, state: { "tls-port": undefined, ...state }, channel: "redis.conf" });
+    check(again.cached === true && again.p === v.p, "re-verify served from DO proof cache, same answer");
+    const drift = await call("jev_invalidate_stale", { state: { "redis.conf": "port 6379" }, channel: "redis.conf" });
+    check(drift.invalidated === 2, "drift invalidates exactly the proofs on the old evidence", `invalidated=${drift.invalidated}`);
   }
   if (tools.includes("jev_edge_proof")) {
     const q2 = await call("jev_ingest", { text: "Is plaintext Redis disabled (port 0)?", question_spec: { confidence_threshold: 0.8 } });

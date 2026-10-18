@@ -19,6 +19,11 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T13 | One MCP core, many transports | `mcp-core.mjs` | deployed |
 | T14 | Provider-gated tool surface | `toolDefs({hasJev,…})` | deployed |
 | T15 | MiniMax as bulk worker, never as judge of record | `providers/minimax.mjs` CLI | lesson |
+| T16 | Content-addressed proof cache | `proof-cache.mjs` `cachedJev` | proven (live, deployed) |
+| T17 | Canonicalize state before hashing *and* sending | `proof-cache.mjs` `canonicalize` | proven |
+| T18 | Drift invalidation by state hash + channel | `orchestrator.invalidateStale`, `jev_invalidate_stale` | proven (live, deployed) |
+| T19 | Latest reading per path (no cherry-picking) | `jev-core.js` `currentPaths` | proven (tests) |
+| T20 | OPEN on unchanged evidence needs a different verifier, not a re-ask | cache semantics | lesson |
 
 ---
 
@@ -77,3 +82,22 @@ MiniMax (on the max plan) is the high-volume worker: decomposition, writing pred
 *Evidence:* in a code review it reported 7 bugs; 1.5 were real. Operational notes:
 - MiniMax-M3 can spend its whole `max_tokens` budget on reasoning and return empty text. The CLI detects this.
 - Use `MiniMax-M2.7-highspeed` for JSON-shaped work.
+
+### T16: Content-addressed proof cache
+The cache key is `provider | model | hash(canonical state) | hash(question + criteria)`. Misses go to Jev in one batched call, hits cost nothing, and the stores are interchangeable (memory, or Durable Object storage). Two benefits:
+- **Cost.** On an agent re-checking 200–300 gates over 8–10 turns with drift, it sent **66–73% fewer Jev questions and tokens**.
+- **Reproducibility.** Jev is not bit-deterministic: 23 of 40 repeated answers varied, p99 delta 0.10, and 7% of gates flip GO↔OPEN at t=0.9 on re-ask. With the cache, gates on unchanged evidence had **0 verdict flips**, against 10–47 without it.
+
+A TTL bounds how long a model alias's (`jev-latest`) old answers are served. The Worker prunes expired entries during the idle cycle.
+
+### T17: Canonicalize state before hashing *and* sending
+Object key order changes Jev's answer: the same content gave 0.86 vs 0.72. Sort keys, hash the canonical bytes, and send those same bytes, so the cache key and the model input can never diverge.
+
+### T18: Drift invalidation by state hash + channel
+Every Jev proof records `evidence.state_hash` and `evidence.channel` (the name of the evidence source, e.g. a file path). When a channel's content changes, `invalidateStale` retires only the proofs built on the old hash. Gates on other channels keep their proofs, and returning to identical old content is served from the cache. Compared with T7's "invalidate by source type", this re-opens far less.
+
+### T19: Latest reading per path
+Proofs that share an independence key form one path, and the path's *current* reading is its most recently appended live proof. Before v0.3.1 the gate kept the **max**. That let a caller re-ask a non-deterministic verifier until it said yes, which is cherry-picking by construction. Independent paths still compound, and a re-read can now also clear an old refutation of its own.
+
+### T20: OPEN on unchanged evidence needs a different verifier, not a re-ask
+With T16 plus T19, re-asking Jev about an OPEN gate on the same evidence returns the same answer, deliberately. To move the gate, change the evidence or add an *independent* path (MiniMax CoT, a compiled parser, a sensor). The cache turns "ask again" from a lottery into a no-op.

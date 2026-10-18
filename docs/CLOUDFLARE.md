@@ -9,8 +9,8 @@ Request ──▶ Worker (worker/index.mjs)
 
 LatticeDO (SQLite-backed Durable Object, one per lattice name)
   memory:  JEVLattice + MCP dispatcher (Jev, MiniMax, Workers AI providers from env)
-  storage: meta, node:<id> (diff-written), auto_verify_state, last_idle_cycle
-  alarm:   10 min after last write → consolidate (+ Jev re-verify if auto-verify set)
+  storage: meta, node:<id> (diff-written), cache:<key> (Jev answers), auto_verify_state, last_idle_cycle
+  alarm:   10 min after last write → consolidate (+ Jev re-verify if auto-verify set) + prune expired cache
 ```
 
 ## Routes
@@ -37,7 +37,7 @@ printf %s "$MINIMAX_TOKEN"     | npx wrangler secret put MINIMAX_TOKEN       # e
 node scripts/smoke-worker.mjs https://jev-lattice.<subdomain>.workers.dev "$JEV_API_KEY" --live
 ```
 
-Optional vars: `MINIMAX_MODEL` (default `MiniMax-M2.7-highspeed`) and `WORKERS_AI_MODEL` (default `@cf/meta/llama-3.1-8b-instruct-fast`).
+Optional vars: `JEV_CACHE_TTL_MS` (default 24h), `MINIMAX_MODEL` (default `MiniMax-M2.7-highspeed`) and `WORKERS_AI_MODEL` (default `@cf/meta/llama-3.1-8b-instruct-fast`).
 
 Local: put the secrets in `.dev.vars` (gitignored) and run `npm run dev`. The Workers AI binding only works remotely, so `jev_edge_proof` fails in local mode.
 

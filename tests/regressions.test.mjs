@@ -196,3 +196,28 @@ test("import sanitizes malformed spatial coordinates", () => {
   assert.deepEqual(L.getNode("b").spatial_coordinate, [0, 0]);
   assert.equal(L.consolidate({}).ok, true);
 });
+
+test("re-asking the same path cannot cherry-pick: the latest reading replaces earlier ones", () => {
+  const L = new JEVLattice();
+  const { node } = L.ingest({ text: "Q", question_spec: { confidence_threshold: 0.9 } });
+  L.addProof(node.id, { source_type: "JEV_NOUL", provider: "typesafe", confidence: 0.93 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "GO");
+  // same verifier, same question, asked again: it now says 0.85 → the path is no longer ≥ 0.9
+  L.addProof(node.id, { source_type: "JEV_NOUL", provider: "typesafe", confidence: 0.85 });
+  const g = L.evaluateGoNoGo(node.id);
+  assert.equal(g.verdict, "OPEN");
+  assert.equal(g.paths, 1);
+  assert.equal(g.bestConfidence, 0.85);
+  // an independent path is still additive
+  L.addProof(node.id, { source_type: "SENSOR", confidence: 0.95 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "GO");
+});
+
+test("a path that recovers from a refutation is no longer refuting", () => {
+  const L = new JEVLattice();
+  const { node } = L.ingest({ text: "Q", question_spec: { confidence_threshold: 0.9 } });
+  L.addProof(node.id, { source_type: "SENSOR", confidence: 0.02 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "REFUTED");
+  L.addProof(node.id, { source_type: "SENSOR", confidence: 0.97 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "GO", "sensor re-read supersedes, no CONFLICT with itself");
+});

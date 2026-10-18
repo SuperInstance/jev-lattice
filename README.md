@@ -25,13 +25,14 @@ Same schema (`jev-lattice/v0.3`, reads v0.2) everywhere. State is portable JSON.
 
 ```bash
 npm install          # only dev dependency: wrangler
-npm test             # offline: 30 v0.2 assertions + 28 node:test cases (regressions, orchestrator, MCP stdio e2e)
+npm test             # offline: 30 v0.2 assertions + 40 node:test cases (regressions, orchestrator, proof cache, MCP stdio e2e)
 npm run example      # progressive compilation demo, no network
 
 # live (needs TYPESAFE_AI_TOKEN and/or MINIMAX_TOKEN)
 npm run live:compile          # Jev → MiniMax → decompose → fan-out → roll-up, then config drift
 npm run live:calibration      # verifier calibration bench vs code-computed ground truth
 npm run live:compile-parser   # MiniMax writes parsers, Jev grades them, held-out test
+npm run live:proof-cache      # multi-turn agent workload: naive vs hash-invalidation vs cache
 
 npm run mcp          # MCP stdio server (state → ./jev-state.json)
 npm run dev          # Worker + Durable Object locally (secrets in .dev.vars)
@@ -48,7 +49,7 @@ npm run deploy       # Cloudflare
 | `allowed_sources` | only these `source_type`s may close the gate |
 | `block_on_conflict` | default `true`: a confident "no" alongside enough "yes" paths blocks GO |
 
-**Independence.** Proofs that share an independence key count once: `independence_key` if set, otherwise `source_type:provider`, otherwise `source_type`. Adding the same parser twice can't fake a COORDINATED gate.
+**Independence.** Proofs that share an independence key form one path: `independence_key` if set, otherwise `source_type:provider`, otherwise `source_type`. A path's current reading is its **latest** live proof, not its best, so re-asking a non-deterministic verifier can't cherry-pick a pass. Adding the same parser twice can't fake a COORDINATED gate.
 
 **Verdicts.**
 - `GO`: enough independent paths are at or above the threshold.
@@ -68,6 +69,7 @@ The core tools are available everywhere: `window.JEV.call`, `createToolRegistry`
 |---|---|
 | `jev_ingest` | Observation or QUESTION (+ `question_spec`, initial `proof`) |
 | `jev_add_proof` / `jev_invalidate_proof` | Add or kill a verification path |
+| `jev_invalidate_stale` | Drift: retire proofs whose recorded evidence hash (per `channel`) no longer matches |
 | `jev_evaluate_go_no_go` | Deterministic gate + verdict |
 | `jev_query` | Spatial + probabilistic beam, prefers closed / cheap paths |
 | `jev_consolidate` | Idle cycle: stitch, merge, prune, tag `seeking_verification` |
@@ -104,19 +106,21 @@ Full numbers are in [docs/RESEARCH-LOG.md](docs/RESEARCH-LOG.md). Reusable patte
 - **Workers AI llama-8b** is useful as a second path but unsafe alone: 5 wrong GOs at 0.9. Pairing it COORDINATED with any other source produced 0 wrong GOs.
 - **Compiling to code.** MiniMax wrote predicates for 10 questions. 9 passed self-verification against confident Jev labels and then scored 100% on held-out configs. The 10th was correctly *rejected* for having too few confident labels.
 - **MiniMax as a code reviewer** reported 7 "bugs"; 1.5 were real. Treat its findings as claims to verify, not as fixes.
+- **Jev is not bit-deterministic.** 7% of gates flip GO↔OPEN at 0.9 when re-asked. The **proof cache** (`proof-cache.mjs`) makes same-evidence-same-verdict hold, with 0 flips, and sends 66–73% fewer Jev questions on a multi-turn agent workload.
 
 ## Layout
 
 ```
 jev-core.js            lattice + gate (no deps; browser, Node, Workers)
-orchestrator.mjs       providers → proofs; fan-out, decompose, roll-up, compile loop
+orchestrator.mjs       providers → proofs; fan-out, decompose, roll-up, compile loop, drift invalidation
+proof-cache.mjs        content-addressed verifier answers (memory / Durable Object storage)
 mcp-core.mjs           transport-agnostic MCP tool defs + JSON-RPC dispatch
 mcp-server.mjs         stdio transport + capacity harness + file persistence
 harness.mjs            capacity probe → minimal / standard / high policy
 providers/             jev.mjs (TypeSafe) · minimax.mjs (+ CLI) · workers-ai.mjs
 worker/index.mjs       Worker + LatticeDO (Durable Object, alarms)
 browser/               canvas UI + edge sync
-experiments/           live-compile · calibration · compile-parser · redis-gen
+experiments/           live-compile · calibration · compile-parser · proof-cache · redis-gen
 tests/                 node:test suites + e2e/browser.e2e.mjs (Playwright)
 docs/                  ARCHITECTURE · MCP · CLOUDFLARE · TILES · RESEARCH-LOG
 ```

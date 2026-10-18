@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-18T01:02:39.271Z",
+  "CONFIGS": 20,
+  "TURNS": 8,
+  "DRIFT": 0.15,
+  "driftCount": 23,
+  "results": [
+    {
+      "strategy": "naive",
+      "calls": 160,
+      "questions": 1600,
+      "input_tokens": 87764,
+      "output_tokens": 36136,
+      "cacheHits": 0,
+      "wall_ms": 1600,
+      "flipsUnchanged": 10,
+      "final": {
+        "go": 92,
+        "open": 16,
+        "wrongGo": 0,
+        "wrongRefute": 0
+      }
+    },
+    {
+      "strategy": "hash",
+      "calls": 160,
+      "questions": 1079,
+      "input_tokens": 77283,
+      "output_tokens": 24572,
+      "cacheHits": 0,
+      "wall_ms": 1670,
+      "flipsUnchanged": 15,
+      "final": {
+        "go": 92,
+        "open": 17,
+        "wrongGo": 0,
+        "wrongRefute": 0
+      }
+    },
+    {
+      "strategy": "hash+cache",
+      "calls": 43,
+      "questions": 430,
+      "input_tokens": 23596,
+      "output_tokens": 9724,
+      "cacheHits": 663,
+      "wall_ms": 1155,
+      "flipsUnchanged": 0,
+      "final": {
+        "go": 87,
+        "open": 18,
+        "wrongGo": 0,
+        "wrongRefute": 0
+      }
+    }
+  ]
+}

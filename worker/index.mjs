@@ -26,6 +26,7 @@ import { createJev } from "../providers/jev.mjs";
 import { createMiniMax, MINIMAX_FAST_MODEL } from "../providers/minimax.mjs";
 import { createWorkersAI } from "../providers/workers-ai.mjs";
 import { verifyOpenGates } from "../orchestrator.mjs";
+import { cachedJev, createProofCache, durableObjectStore } from "../proof-cache.mjs";
 
 const IDLE_MS = 10 * 60 * 1000;
 const NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -56,7 +57,11 @@ export class LatticeDO extends DurableObject {
     this.saved = new Map(); // node id → last persisted JSON, for diff writes
     this.ctx.blockConcurrencyWhile(() => this.load());
 
-    const jev = env.TYPESAFE_AI_TOKEN ? createJev({ apiKey: env.TYPESAFE_AI_TOKEN }) : null;
+    // Jev answers cached in this lattice's own DO storage, keyed by (state hash, question)
+    const ttlMs = Number(env.JEV_CACHE_TTL_MS) || 24 * 3600 * 1000;
+    const jev = env.TYPESAFE_AI_TOKEN
+      ? cachedJev(createJev({ apiKey: env.TYPESAFE_AI_TOKEN }), createProofCache({ store: durableObjectStore(ctx.storage), ttlMs }))
+      : null;
     const mm = env.MINIMAX_TOKEN ? createMiniMax({ apiKey: env.MINIMAX_TOKEN, model: env.MINIMAX_MODEL || MINIMAX_FAST_MODEL }) : null;
     const small = env.AI ? createWorkersAI(env.AI, env.WORKERS_AI_MODEL ? { model: env.WORKERS_AI_MODEL } : {}) : null;
     this.jev = jev;
@@ -105,8 +110,19 @@ export class LatticeDO extends DurableObject {
         verified = { ok: false, error: e.message };
       }
     }
-    await this.ctx.storage.put("last_idle_cycle", { at: new Date().toISOString(), consolidate, verified });
+    const cachePruned = await this.pruneCache();
+    await this.ctx.storage.put("last_idle_cycle", { at: new Date().toISOString(), consolidate, verified, cachePruned });
     await this.persist({ rearm: false });
+  }
+
+  /** Drop expired proof-cache entries so DO storage doesn't grow without bound. */
+  async pruneCache(limit = 1000) {
+    const ttl = this.jev?.cache?.ttlMs;
+    if (!ttl) return 0;
+    const entries = await this.ctx.storage.list({ prefix: "cache:", limit });
+    const dead = [...entries].filter(([, v]) => Date.now() - (v?.at || 0) > ttl).map(([k]) => k);
+    for (let i = 0; i < dead.length; i += 128) await this.ctx.storage.delete(dead.slice(i, i + 128));
+    return dead.length;
   }
 
   /** Test/ops hook: run the idle cycle now instead of waiting for the alarm. */
@@ -136,7 +152,8 @@ export class LatticeDO extends DurableObject {
       stats: this.lattice.stats(),
       tools: this.mcp.defs.map(d => d.name),
       last_idle_cycle: (await this.ctx.storage.get("last_idle_cycle")) || null,
-      auto_verify: !!(await this.ctx.storage.get("auto_verify_state"))
+      auto_verify: !!(await this.ctx.storage.get("auto_verify_state")),
+      proof_cache: this.jev?.cache ? { ...this.jev.cache.stats, ttlMs: this.jev.cache.ttlMs } : null
     };
   }
 }

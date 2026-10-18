@@ -121,7 +121,16 @@ export function createJev({
 }
 
 /** Convert a Noul result into a lattice proof. */
-export function noulToProof({ p, model, latency_ms }, { note = null, instructions = null } = {}) {
+export function noulToProof(
+  { p, model, latency_ms, cached },
+  { note = null, instructions = null, state_hash = null, channel = null } = {}
+) {
+  const evidence = {};
+  if (instructions) evidence.instructions = instructions;
+  // state_hash + channel let drift invalidation kill exactly the proofs whose evidence changed
+  if (state_hash) evidence.state_hash = state_hash;
+  if (channel) evidence.channel = channel;
+  if (cached) evidence.cached = true;
   return {
     source_type: "JEV_NOUL",
     provider: "typesafe",
@@ -130,7 +139,7 @@ export function noulToProof({ p, model, latency_ms }, { note = null, instruction
     cost_weight: JEV_COST_WEIGHT,
     latency_ms,
     note,
-    evidence: instructions ? { instructions } : undefined
+    evidence: Object.keys(evidence).length ? evidence : undefined
   };
 }
 

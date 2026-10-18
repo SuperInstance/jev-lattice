@@ -268,18 +268,13 @@ export class JEVLattice {
     const required = mode === "BINARY" ? 1 : spec.required_independent_proofs;
     const live = liveProofs(n.active_proofs, spec, now);
 
-    // Independence: proofs sharing an independence key count once (best confidence wins)
-    const byKey = new Map();
-    for (const p of live) {
-      if (p.confidence < threshold) continue;
-      const k = independenceKey(p);
-      if (!byKey.has(k) || byKey.get(k).confidence < p.confidence) byKey.set(k, p);
-    }
-    const valid = [...byKey.values()];
-    // Refutation: a live path confidently says "no" (confidence ≤ 1 − threshold)
-    const refuting = new Set(
-      live.filter(p => p.confidence <= 1 - threshold).map(independenceKey)
-    );
+    // One verification path = one independence key. Its CURRENT reading is the most
+    // recently appended live proof — not the best one. Keeping the max would let a
+    // caller re-ask a non-deterministic verifier until it passes (cherry-picking).
+    const paths = currentPaths(live);
+    const valid = paths.filter(p => p.confidence >= threshold);
+    // Refutation: a path's current reading confidently says "no" (confidence ≤ 1 − threshold)
+    const refuting = new Set(paths.filter(p => p.confidence <= 1 - threshold).map(independenceKey));
     const satisfied = valid.length >= required;
     const conflict = satisfied && refuting.size > 0;
     const go = satisfied && !(conflict && spec.block_on_conflict);
@@ -297,9 +292,10 @@ export class JEVLattice {
       threshold,
       liveProofs: live.length,
       ignoredProofs: (n.active_proofs || []).length - live.length,
-      bestConfidence: live.reduce((m, p) => Math.max(m, p.confidence), 0),
+      paths: paths.length,
+      bestConfidence: paths.reduce((m, p) => Math.max(m, p.confidence), 0),
       proofSources: valid.map(p => p.source_type),
-      multiProofSalience: multiProofSalience(live)
+      multiProofSalience: multiProofSalience(paths)
     };
     if (conflict) {
       return {
@@ -764,6 +760,13 @@ function normalizeProof(p) {
 function independenceKey(p) {
   if (p.independence_key) return String(p.independence_key);
   return p.provider ? `${p.source_type}:${p.provider}` : p.source_type;
+}
+
+/** Latest live proof per independence key, in append order (the proof log is the clock). */
+function currentPaths(live) {
+  const byKey = new Map();
+  for (const p of live) byKey.set(independenceKey(p), p);
+  return [...byKey.values()];
 }
 
 function liveProofs(proofs, spec, now = Date.now()) {

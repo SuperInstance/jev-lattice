@@ -11,6 +11,7 @@
  * The gate itself stays deterministic: providers only append proofs.
  */
 import { noulToProof } from "./providers/jev.mjs";
+import { stateHash } from "./proof-cache.mjs";
 
 export const MINIMAX_COST_WEIGHT = 0.85;
 export const ROLLUP_COST_WEIGHT = 0.01;
@@ -46,21 +47,26 @@ export function latticeState(lattice, nodeId, { topK = 6 } = {}) {
   return { question: n.text, known_facts: [...closed, ...observations] };
 }
 
-/** Ask Jev one Noul about a question node and append the proof. */
-export async function verifyWithJev(lattice, nodeId, { jev, state, instructions, criteria } = {}) {
+/**
+ * Ask Jev one Noul about a question node and append the proof.
+ * `channel` names the evidence source (e.g. "redis.conf") so that
+ * invalidateStale can later retire exactly the proofs built on old evidence.
+ */
+export async function verifyWithJev(lattice, nodeId, { jev, state, instructions, criteria, channel = null } = {}) {
   const n = need(lattice, nodeId);
   const st = state ?? latticeState(lattice, nodeId);
   const instr = instructions || questionText(n);
   const res = await jev.noul(st, instr, criteria);
-  const added = lattice.addProof(nodeId, noulToProof(res, { note: "jev noul", instructions: instr }));
-  return { ok: true, p: res.p, model: res.model, latency_ms: res.latency_ms, proof: added.proof, gate: lattice.evaluateGoNoGo(nodeId) };
+  const h = res.state_hash ?? (await stateHash(st));
+  const added = lattice.addProof(nodeId, noulToProof(res, { note: "jev noul", instructions: instr, state_hash: h, channel }));
+  return { ok: true, p: res.p, model: res.model, latency_ms: res.latency_ms, cached: !!res.cached, state_hash: h, proof: added.proof, gate: lattice.evaluateGoNoGo(nodeId) };
 }
 
 /**
  * Speculative fan-out: every open question in one Jev request.
  * `state` is shared (e.g. a config file, a log, a diff). Returns per-node gates.
  */
-export async function verifyOpenGates(lattice, { jev, state, ids = null, limit = 64 } = {}) {
+export async function verifyOpenGates(lattice, { jev, state, ids = null, limit = 64, channel = null } = {}) {
   const targets = lattice
     .listNodes()
     .filter(n => n.node_type === "QUESTION" && (!ids || ids.includes(n.id)))
@@ -70,18 +76,49 @@ export async function verifyOpenGates(lattice, { jev, state, ids = null, limit =
   const items = targets.map(n => ({ key: n.id, instructions: questionText(n) }));
   const st = state ?? { known_facts: lattice.listNodes().filter(n => n.node_type === "OBSERVATION").map(n => n.text) };
   const answers = await jev.nouls(st, items);
+  const h = answers._state_hash ?? (await stateHash(st));
   const results = [];
   for (const n of targets) {
     const p = answers[n.id]?.p;
     if (typeof p !== "number") continue;
-    lattice.addProof(n.id, noulToProof({ p, model: answers._model, latency_ms: answers._latency_ms }, {
+    lattice.addProof(n.id, noulToProof({ p, model: answers[n.id].model || answers._model, latency_ms: answers._latency_ms, cached: answers[n.id].cached }, {
       note: `jev fan-out (${targets.length} in one call)`,
-      instructions: questionText(n)
+      instructions: questionText(n),
+      state_hash: h,
+      channel
     }));
     const gate = lattice.evaluateGoNoGo(n.id);
     results.push({ id: n.id, text: n.text, p, verdict: gate.verdict, go: gate.go });
   }
-  return { ok: true, verified: results.length, latency_ms: answers._latency_ms, usage: answers._usage, results };
+  return { ok: true, verified: results.length, latency_ms: answers._latency_ms, usage: answers._usage, cache: answers._cache || null, state_hash: h, results };
+}
+
+/**
+ * Drift invalidation by content hash: retire every live proof whose recorded
+ * evidence (`evidence.state_hash`, optionally limited to one `channel`) differs
+ * from the current state. Proofs built on unchanged evidence stay valid —
+ * unlike invalidating by source type, which re-opens everything.
+ */
+export async function invalidateStale(lattice, { state, channel = null, reason = "evidence changed" } = {}) {
+  const current = await stateHash(state);
+  let invalidated = 0, kept = 0;
+  const reopened = [];
+  for (const n of lattice.listNodes()) {
+    if (n.node_type !== "QUESTION") continue;
+    const wasGo = lattice.evaluateGoNoGo(n.id).go;
+    let touched = false;
+    for (const p of n.active_proofs || []) {
+      const ev = p.evidence;
+      if (p.invalidated || !ev?.state_hash) continue;
+      if (channel && ev.channel !== channel) continue;
+      if (ev.state_hash === current) { kept++; continue; }
+      lattice.invalidateProof(n.id, p.proof_id, `${reason} (${ev.state_hash.slice(0, 8)} → ${current.slice(0, 8)})`);
+      invalidated++;
+      touched = true;
+    }
+    if (touched && wasGo && !lattice.evaluateGoNoGo(n.id).go) reopened.push(n.id);
+  }
+  return { ok: true, state_hash: current, invalidated, kept, reopened };
 }
 
 /**

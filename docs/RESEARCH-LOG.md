@@ -72,8 +72,38 @@ The Worker, Durable Object, Workers AI and Static Assets are deployed. These all
 - `scripts/smoke-worker.mjs --live`: 15/15
 - `tests/e2e/browser.e2e.mjs <prod>`: 7/7, including the browser → edge → Jev → browser round-trip
 
+## 2026-10-18: backlog 1, proof cache
+
+### Is Jev deterministic? No.
+- 4 configs × 10 questions × 4 repeats: 23 of 40 answers varied, by up to 0.16.
+- Reordering the keys of an otherwise identical `state` moved one answer from 0.86 to 0.72.
+- Asking one question alone vs in a batch: 2 of 5 varied, by up to 0.02.
+- With reading rules in `state` (10 configs × 10 questions × 5 repeats): delta p50 was 0.01, p90 0.03, p99 0.10, max 0.11.
+  - Verdict flips on re-ask: 1% of gates at t=0.8, 7% at 0.9, 4% at 0.95.
+  - **0 wrong GOs in any sample.**
+- Mean-of-5 Brier was 0.0032 vs 0.0031 for a single sample. Self-consistency sampling buys nothing here.
+
+### Cache experiment (`experiments/proof-cache.mjs`)
+An agent re-checks all gates every turn while configs drift. All strategies share the same drift schedule.
+
+20 configs × 10 questions, 8 turns, 15% drift (23 changes):
+
+| strategy | Jev questions | calls | input tokens | flips on unchanged evidence | wrong GO |
+|---|---|---|---|---|---|
+| naive (invalidate all, re-ask all) | 1600 | 160 | 87.8k | 10 | 0 |
+| hash invalidation, no cache | 1079 | 160 | 77.3k | 15 | 0 |
+| hash + cache | **430** | **43** | **23.6k** | **0** | 0 |
+
+30 configs × 10 questions, 10 turns, 30% drift (72 changes): 3000 / 2152 / **1010** questions, 164k / 147k / **55k** tokens, and 47 / 23 / **0** flips.
+
+### Gate fix found by this work: latest reading per path
+Re-asking an OPEN gate while the gate kept the best proof per independence key let GOs creep up: the no-cache strategy ended with 92 GOs vs 91 for naive *before* the fix. The effect in this workload is small because Jev is calibrated, but the bias is built into the old design. The gate now uses the most recent live proof per key (`currentPaths`), with regression tests. Results after the fix are the tables above.
+
+### Deployed
+The Worker caches in Durable Object storage (`cache:` prefix, TTL `JEV_CACHE_TTL_MS`, default 24h) and prunes expired entries during the idle cycle. Production smoke passes 17/17: a re-verify is served from the cache with the identical answer, and drift invalidates exactly the 2 proofs on the old evidence.
+
 ## Backlog (curated; some ideas from a MiniMax brainstorm)
-1. **Proof cache** keyed by `hash(state) + question`, stored in DO storage. On drift, invalidate by state hash instead of by source type.
+1. ~~**Proof cache**~~: done, see above.
 2. **Compiled-first scheduler**: try accepted predicates before Jev, and fall back when the predicate throws or the input is outside its training distribution.
 3. **Per-source calibration** (Platt/isotonic) fitted on the bench and applied in `noulToProof` / `proveWithLLM` before the gate.
 4. **Decomposition vs direct**: on composite questions with code truth, does decompose → fan-out → roll-up beat one direct Noul?

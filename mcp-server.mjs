@@ -10,12 +10,15 @@
  *   TYPESAFE_AI_TOKEN   enables jev_verify / jev_verify_open / jev_compile
  *   MINIMAX_TOKEN       enables jev_minimax_proof / jev_decompose / jev_compile
  *   JEV_NO_PROVIDERS=1  disable both providers (offline / tests)
+ *   JEV_CACHE=0         disable the (state hash, question) proof cache
+ *   JEV_CACHE_TTL_MS    cache entry lifetime (default 24h)
  */
 import { JEVLattice, SCHEMA } from "./jev-core.js";
 import { createHarness } from "./harness.mjs";
 import { createMcp } from "./mcp-core.mjs";
 import { createJev } from "./providers/jev.mjs";
 import { createMiniMax } from "./providers/minimax.mjs";
+import { cachedJev, createProofCache } from "./proof-cache.mjs";
 import readline from "node:readline";
 import fs from "node:fs";
 import path from "node:path";
@@ -48,7 +51,10 @@ function persist() {
 }
 
 const offline = process.env.JEV_NO_PROVIDERS === "1";
-const jev = !offline && process.env.TYPESAFE_AI_TOKEN ? createJev() : null;
+const rawJev = !offline && process.env.TYPESAFE_AI_TOKEN ? createJev() : null;
+const jev = rawJev && process.env.JEV_CACHE !== "0"
+  ? cachedJev(rawJev, createProofCache({ ttlMs: Number(process.env.JEV_CACHE_TTL_MS) || 24 * 3600 * 1000 }))
+  : rawJev;
 const mm = !offline && process.env.MINIMAX_TOKEN ? createMiniMax() : null;
 
 const mcp = createMcp({

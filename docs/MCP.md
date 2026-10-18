@@ -17,12 +17,14 @@ Environment:
 | `TYPESAFE_AI_TOKEN` | — | enables `jev_verify`, `jev_verify_open`, `jev_compile` |
 | `MINIMAX_TOKEN` | — | enables `jev_minimax_proof`, `jev_decompose`, `jev_compile` |
 | `JEV_NO_PROVIDERS` | — | `1` hides provider tools (offline / tests) |
+| `JEV_CACHE` | on | `0` disables the (state hash, question) proof cache |
+| `JEV_CACHE_TTL_MS` | 86400000 | proof-cache entry lifetime |
 
 ## Tools
 
 See main README for full list. Names are prefixed `jev_` on the wire:
 
-- `jev_ingest`, `jev_add_proof`, `jev_invalidate_proof`, `jev_evaluate_go_no_go`
+- `jev_ingest`, `jev_add_proof`, `jev_invalidate_proof`, `jev_invalidate_stale`, `jev_evaluate_go_no_go`
 - `jev_query`, `jev_consolidate`, `jev_stats`, `jev_rollup`
 - `jev_list_nodes`, `jev_get_node`, `jev_boost`, `jev_prune`
 - `jev_export_state`, `jev_import_state`

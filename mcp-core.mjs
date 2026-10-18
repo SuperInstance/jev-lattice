@@ -7,7 +7,7 @@
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.3.0" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.3.1" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -41,6 +41,7 @@ const SPEC_SCHEMA = {
 
 const ID = { type: "object", properties: { id: { type: "string" } }, required: ["id"] };
 const EMPTY = { type: "object", properties: {} };
+const CHANNEL_ARG = { type: "string", description: "Name of the evidence source (e.g. a file path). Recorded on proofs so jev_invalidate_stale can retire exactly the ones built on old content." };
 const STATE_ARG = {
   description: "System One state: text or JSON the verifier reads (config, log, diff…). Defaults to the lattice neighborhood.",
   type: ["string", "object", "array"]
@@ -49,7 +50,7 @@ const STATE_ARG = {
 const MUTATING = new Set([
   "jev_ingest", "jev_add_proof", "jev_invalidate_proof", "jev_consolidate", "jev_import_state",
   "jev_boost", "jev_prune", "jev_verify", "jev_verify_open", "jev_minimax_proof", "jev_decompose",
-  "jev_rollup", "jev_compile", "jev_edge_proof"
+  "jev_rollup", "jev_compile", "jev_edge_proof", "jev_invalidate_stale"
 ]);
 
 export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false } = {}) {
@@ -73,6 +74,8 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
     { name: "jev_get_node", description: "Get full node by id.", inputSchema: ID },
     { name: "jev_boost", description: "Raise a node's salience.", inputSchema: { type: "object", properties: { id: { type: "string" }, delta: { type: "number" } }, required: ["id"] } },
     { name: "jev_prune", description: "Delete a node and its edges.", inputSchema: ID },
+    { name: "jev_invalidate_stale", description: "Drift invalidation by content hash: retire proofs whose recorded evidence (in `channel`) differs from `state`. Proofs on unchanged evidence stay valid.",
+      inputSchema: { type: "object", properties: { state: STATE_ARG, channel: CHANNEL_ARG, reason: { type: "string" } }, required: ["state"] } },
     { name: "jev_rollup", description: "Deterministic: if all child sub-questions are GO, add a cheap LATTICE_READ proof to the parent (or a refuting one if a child is REFUTED).", inputSchema: ID },
     { name: "jev_export_state", description: `Export full lattice JSON (schema ${SCHEMA}).`, inputSchema: EMPTY },
     { name: "jev_import_state", description: "Import lattice JSON state (replaces current).",
@@ -84,9 +87,9 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
   if (hasJev) {
     defs.push(
       { name: "jev_verify", description: "Ask TypeSafe Jev (calibrated System One model) whether a QUESTION holds given `state`; appends a cheap JEV_NOUL proof.",
-        inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG, instructions: { type: "string" } }, required: ["id"] } },
-      { name: "jev_verify_open", description: "Speculative fan-out: verify every open QUESTION against one shared `state` in a single Jev request.",
-        inputSchema: { type: "object", properties: { state: STATE_ARG, ids: { type: "array", items: { type: "string" } } } } }
+        inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG, instructions: { type: "string" }, channel: CHANNEL_ARG }, required: ["id"] } },
+      { name: "jev_verify_open", description: "Speculative fan-out: verify every open QUESTION against one shared `state` in a single Jev request. Answers are cached by (state hash, question) when a cache is configured.",
+        inputSchema: { type: "object", properties: { state: STATE_ARG, ids: { type: "array", items: { type: "string" } }, channel: CHANNEL_ARG } } }
     );
   }
   if (hasMiniMax) {
@@ -132,7 +135,11 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, capaci
       case "jev_evaluate_go_no_go": return tools.evaluateGoNoGo({ id: args.id });
       case "jev_query": return tools.query(args);
       case "jev_consolidate": return tools.consolidate(consolidateOpts());
-      case "jev_stats": return capacity ? { ...tools.stats(), capacity: capacity() } : tools.stats();
+      case "jev_stats": {
+        const st = capacity ? { ...tools.stats(), capacity: capacity() } : tools.stats();
+        return jev?.cache ? { ...st, proofCache: { ...jev.cache.stats, ttlMs: jev.cache.ttlMs } } : st;
+      }
+      case "jev_invalidate_stale": return orch.invalidateStale(lattice, { state: args.state, channel: args.channel, reason: args.reason });
       case "jev_list_nodes":
         return { ok: true, nodes: lattice.listNodes().map(n => lattice._nodeSummary(n)).map(s => ({ ...s, verdict: s.node_type === "QUESTION" ? lattice.evaluateGoNoGo(s.id).verdict : undefined })) };
       case "jev_get_node": return tools.getNode({ id: args.id });
@@ -142,8 +149,8 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, capaci
       case "jev_export_state": return tools.exportState();
       case "jev_import_state": return tools.importState({ state: args.state });
       case "jev_capacity": return { ok: true, ...capacity() };
-      case "jev_verify": return orch.verifyWithJev(lattice, args.id, { jev, state: args.state, instructions: args.instructions });
-      case "jev_verify_open": return orch.verifyOpenGates(lattice, { jev, state: args.state, ids: args.ids });
+      case "jev_verify": return orch.verifyWithJev(lattice, args.id, { jev, state: args.state, instructions: args.instructions, channel: args.channel });
+      case "jev_verify_open": return orch.verifyOpenGates(lattice, { jev, state: args.state, ids: args.ids, channel: args.channel });
       case "jev_minimax_proof": return orch.proveWithMiniMax(lattice, args.id, { mm, state: args.state });
       case "jev_decompose": return orch.decompose(lattice, args.id, { mm, maxSub: args.maxSub });
       case "jev_compile": return orch.compile(lattice, args.id, { jev, mm, state: args.state });
