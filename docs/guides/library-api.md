@@ -56,6 +56,16 @@ Providers append proofs; only the gate decides.
 | `rollup(L, id)` | Children all GO → a `LATTICE_READ` proof; a REFUTED child → a refuting proof. |
 | `compile(L, id, {jev, mm, state?, stopOn?})` | Cheap-first loop: Jev → MiniMax → decompose + fan-out → roll-up. |
 
+## facts.mjs and frameEvidence: what Jev reads
+```js
+import { factsForFiles } from "jev-lattice/facts";
+import { verifyFiles, frameEvidence } from "jev-lattice/orchestrator";
+const facts = factsForFiles(files, { "redis.conf": [{ name: "maxmemory_bytes", extract: "size", key: "maxmemory" }] });
+await verifyFiles(L, { jev, files, rules, facts, quarantine: false });
+frameEvidence(files, { rules, facts, quarantine })   // the state verifyFiles sends: descriptions, files, rules, derived_facts
+```
+Questions can carry `question_spec.focus` (sent as structured instructions `{question, focus}`) and `question_spec.criteria` (`{true, false}`, sent as Noul criteria); `jevQuestion(node)` builds both. Why each of these exists, with numbers: [typesafe.md](typesafe.md).
+
 ## proof-cache.mjs: reproducible, cheap verification
 ```js
 import { cachedJev, createProofCache, memoryStore, durableObjectStore, stabilityProbe } from "jev-lattice/proof-cache";

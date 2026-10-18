@@ -23,6 +23,9 @@ A **question node** has `node_type: "QUESTION"`, a `question_spec`, and `active_
 | `reads` | string[] \| null | null | Informational for the gate; used by verifiers. |
 | `fragility_band` | number in [0, 1] | 0.02 | |
 | `require_firm` | boolean | false | Only an explicit `true` enables it (§2, step 10). |
+| `intent` | string \| null | null | Informational for verifiers. |
+| `focus` | string \| null | null | Informational for verifiers (what Jev should look at). |
+| `criteria` | `{true?, false?}` \| null | null | Informational for verifiers (TypeSafe Noul criteria); other keys are dropped. |
 
 A QUESTION with no `question_spec` MUST get the normalised defaults: a BINARY gate. It MUST NOT evaluate to GO without proofs.
 

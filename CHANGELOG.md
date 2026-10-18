@@ -2,6 +2,21 @@
 
 All notable changes. Versions follow semver once v1.0 is reached; before that, minor versions may change APIs. The state schema stays importable forward.
 
+## 0.8.0
+### Added
+- `facts.mjs`: trusted extractors (`directive`, `size`, `duration`, `env`, `json`, `count`, `regex`); `facts` in `jev.gates.json`, `verifyFiles({facts})` and `jev_verify_files`.
+- `frameEvidence` (file descriptions, `quarantine`, `strip`), `stripComments`, `describeFile`, `jevQuestion`.
+- `question_spec.focus` and `question_spec.criteria`, sent to Jev as structured instructions and Noul criteria; per-gate `focus` and `criteria` in the gate config.
+- `jev lint` / `lintGates`: evidence-blind probe, wide `reads`, negated phrasing.
+- Providers: `providers/groq.mjs`, `providers/deepseek.mjs` (prefix-cache accounting, `withPrefix`), and the shared `providers/openai-compatible.mjs`.
+- Jev provider: gzip request bodies of 16 KB or more; `max_tokens_exceeded` hint; request id in errors.
+- `docs/guides/typesafe.md`; round 6 experiments (`experiments/typesafe-*.mjs`, `hard-gen.mjs`).
+### Changed
+- **Comments are stripped before Jev reads files, by default** (`strip_comments: false` opts out). Adaptive comment-only injections produced 13–19% wrong GOs without it, 0% with it.
+- `verifyFiles` describes each file by type.
+### Fixed
+- `facts.mjs` `directive`/`size`/`duration`: nginx-style `;` terminators (found by a MiniMax-M3 review).
+
 ## 0.7.0
 ### Added
 - **Worker control plane** (`worker/control.mjs`): tenant API keys (D1, only hashes stored), scopes `read ⊂ verify ⊂ admin`, lattice name patterns, per-key rate limits (rate-limiting binding), failed-auth limits per IP, `/admin/keys` and `/admin/events` (root only).

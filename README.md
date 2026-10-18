@@ -267,6 +267,8 @@ Selected results. Every number has a script in `experiments/` and raw output in 
 - **Model upgrades:** `jev-1.13.0` → `jev-1.14.0` moved 4.7–6.2% of verdicts, 2–2.5× the re-ask rate, with the same accuracy. Pin the model.
 - **Choice-first grouping** generalised to nginx and env files: 0 wrong GOs, recall 0.978 → 1.000, 31% fewer questions.
 
+- **Using Jev well** ([docs/guides/typesafe.md](docs/guides/typesafe.md)): having code compute units, overrides and defaults (`facts`) took hard cases from 179 to 198 correct out of 200; describing the file cut Brier about 3×; quarantine framing stopped every injected wrong GO; batching 800 questions in one call took 253 ms with no interference.
+
 ---
 
 ## Layout

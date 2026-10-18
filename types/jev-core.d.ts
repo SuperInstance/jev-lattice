@@ -16,6 +16,11 @@ export interface QuestionSpec {
   reads?: string[] | null;
   fragility_band?: number;
   require_firm?: boolean;
+  intent?: string | null;
+  /** for verifiers: what to look at (sent as structured instructions) */
+  focus?: string | null;
+  /** for verifiers: TypeSafe Noul criteria */
+  criteria?: { true?: unknown; false?: unknown } | null;
 }
 
 export interface ProofInput {

@@ -52,6 +52,11 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T46 | Falsifiable review prompts | `docs/journal/r5-control-plane-review.*` | proven (1 review) |
 | T47 | Let the proposer abstain; key by (group, question) | `grouping.mjs` | proven |
 | T48 | Regenerate unusable output before judging it | `compiled.mjs` `genRetries`, `extractCode` | proven |
+| T49 | Code computes, Jev judges (trusted facts) | `facts.mjs`, `frameEvidence({facts})` | proven (R6) |
+| T50 | Describe what the evidence is | `describeFile`, `frameEvidence` | proven (R6) |
+| T51 | Remove the attack surface, don't argue with it (strip comments) | `stripComments` (default on) | proven (R6) |
+| T52 | Adaptive red team with a reviewer model | `experiments/typesafe-redteam-adaptive.mjs` | method |
+| T53 | Evidence-blind lint | `lintGates`, `jev lint` | shipped |
 
 ---
 
@@ -215,3 +220,20 @@ When a model proposes structure (groups, decompositions), the prompt must allow 
 
 ### T48: Regenerate unusable model output before judging it
 Separate "the output wasn't usable" (no code, a parse or compile error) from "the code was wrong" (disagreed with labels). Regenerate the first cheaply, without spending a validation attempt, and extract code from fences or bare arrows as well as JSON. Usable candidates: 60% → 85–90%. *Where:* `compilePredicate({genRetries})`, `extractCode`.
+
+## Round 6 tiles (v0.8)
+
+### T49: Code computes, Jev judges
+Jev reads literally and is weakest at units, last-wins resolution, defaults and counts. Trusted extractors compute those values and add them to the state next to the file. Hard bench: 179 → 198 of 200 correct (Brier 0.0189 → 0.0011); product path: 106 → 117 of 120. **The facts become an authority**: Jev followed a deliberately wrong fact 9 of 60 times and never sided with the file over it. So extractors are tested code, never model-written, and they report "not set" rather than guess.
+
+### T50: Describe the evidence
+For the same redis.conf, Brier went from 0.0153 (bare string) to 0.0055 when the state said what the file is. `frameEvidence` adds a description by file type.
+
+### T51: Remove the attack surface, don't argue with it
+Framing and criteria against prompt injection held on one model version and broke on the next (2 wrong GOs on 1.14.0 against an adaptive attacker). Deleting semantically void content (full-line comments) with trusted code before the model reads it took wrong GOs from 83–119 of 630 to 0, at no cost in clean accuracy.
+
+### T52: Adaptive red team with a reviewer model
+A one-shot attack list badly underestimates risk: 1 wrong GO in 360 where an adaptive attacker got 33. Give the attacker model the defense and its best scores so far, and iterate; keep the payloads truth-preserving (comment-only) so the score is unambiguous.
+
+### T53: Evidence-blind lint
+Ask every gate about empty versions of its files. A GO means the gate passes when its evidence is absent. One call per file set; it runs before a gate is trusted.

@@ -1,0 +1,72 @@
+[
+  [
+    "Is the plaintext (non-TLS) port disabled (the effective `port` is 0)?",
+    "Is the effective plaintext `port` 0, meaning the plaintext (non-TLS) port is disabled?",
+    "Is plaintext (non-TLS) access disabled because the effective `port` is 0?",
+    "Does the effective plaintext (non-TLS) `port` equal 0, leaving that port disabled?",
+    "Is the plaintext (non-TLS) port turned off (effective `port` = 0)?"
+  ],
+  [
+    "Is TLS enabled (a `tls-port` is configured)?",
+    "Has TLS been enabled by configuring a `tls-port`?",
+    "Is a TLS port (`tls-port`) configured, thereby enabling TLS?",
+    "Does Redis have TLS enabled through a configured `tls-port`?",
+    "Is TLS turned on (with a `tls-port` configured)?"
+  ],
+  [
+    "Is AOF persistence enabled (`appendonly yes` in effect)?",
+    "Is `appendonly` effectively set to `yes`, enabling AOF persistence?",
+    "Does AOF persistence have an effective `appendonly yes` setting?",
+    "With `appendonly yes` in effect, is AOF persistence enabled?",
+    "Is AOF persistence turned on through the effective `appendonly yes` setting?"
+  ],
+  [
+    "Is a memory limit (`maxmemory`) configured?",
+    "Has a memory limit been configured through `maxmemory`?",
+    "Is the `maxmemory` setting present, indicating a configured memory limit?",
+    "Does Redis have a configured memory limit (`maxmemory`)?",
+    "Is a `maxmemory` value configured as the memory limit?"
+  ],
+  [
+    "Is the memory limit (`maxmemory`) at least 1 GB?",
+    "Is the configured `maxmemory` limit 1 GB or greater?",
+    "Does the memory limit (`maxmemory`) reach at least 1 GB?",
+    "Is `maxmemory` set to 1 GB or more?",
+    "Does the configured memory limit (`maxmemory`) amount to at least 1 GB?"
+  ],
+  [
+    "Does the eviction policy evict keys when memory is full (anything but `noeviction`)?",
+    "Under any eviction policy other than `noeviction`, are keys evicted when memory is full?",
+    "Does an eviction policy other than `noeviction` cause keys to be evicted when memory is full?",
+    "When memory is full, does the configured eviction policy evict keys (anything but `noeviction`)?",
+    "Is key eviction used when memory is full, with the policy set to anything except `noeviction`?"
+  ],
+  [
+    "Is password authentication (`requirepass`) configured?",
+    "Has `requirepass` been configured, thereby enabling password authentication?",
+    "Is there a configured `requirepass` setting for password authentication?",
+    "Does Redis use a configured `requirepass` value to require password authentication?",
+    "Is password authentication turned on by a configured `requirepass`?"
+  ],
+  [
+    "Is Redis bound only to the loopback interface?",
+    "Is the Redis binding restricted solely to the loopback interface?",
+    "Is Redis bound exclusively to the loopback interface?",
+    "Has Redis been configured to bind only to the loopback interface?",
+    "Are all Redis bind addresses limited to the loopback interface?"
+  ],
+  [
+    "Is Redis listening on all interfaces (`bind 0.0.0.0`)?",
+    "Has Redis been configured to listen on all interfaces with `bind 0.0.0.0`?",
+    "Does the Redis `bind` configuration use `0.0.0.0`, making it listen on all interfaces?",
+    "Is Redis listening on every interface via `bind 0.0.0.0`?",
+    "Does `bind 0.0.0.0` cause Redis to listen on all interfaces?"
+  ],
+  [
+    "Is the effective plaintext port 6379?",
+    "Does the effective plaintext (non-TLS) port equal 6379?",
+    "Is the plaintext port, as currently effective, set to 6379?",
+    "Has the effective plaintext `port` been set to 6379?",
+    "Is the effective `port` for plaintext (non-TLS) traffic 6379?"
+  ]
+]

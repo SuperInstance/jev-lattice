@@ -1,0 +1,110 @@
+{
+  "at": "2026-10-18T15:28:26.763Z",
+  "n": 845,
+  "results": {
+    "jev-1.13.0 | v1": {
+      "redis": {
+        "n": 500,
+        "correct": 478,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 22,
+        "brier": 0.0038
+      },
+      "repo": {
+        "n": 225,
+        "correct": 225,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0.0007
+      },
+      "hard": {
+        "n": 120,
+        "correct": 111,
+        "wrongGo": 1,
+        "wrongNo": 0,
+        "open": 8,
+        "brier": 0.0292
+      }
+    },
+    "jev-1.13.0 | v2": {
+      "redis": {
+        "n": 500,
+        "correct": 459,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 41,
+        "brier": 0.0047
+      },
+      "repo": {
+        "n": 225,
+        "correct": 222,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 3,
+        "brier": 0.0022
+      },
+      "hard": {
+        "n": 120,
+        "correct": 109,
+        "wrongGo": 1,
+        "wrongNo": 0,
+        "open": 10,
+        "brier": 0.0222
+      }
+    },
+    "jev-1.14.0 | v1": {
+      "redis": {
+        "n": 500,
+        "correct": 488,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 12,
+        "brier": 0.0019
+      },
+      "repo": {
+        "n": 225,
+        "correct": 225,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0.0003
+      },
+      "hard": {
+        "n": 120,
+        "correct": 112,
+        "wrongGo": 0,
+        "wrongNo": 2,
+        "open": 6,
+        "brier": 0.0241
+      }
+    },
+    "jev-1.14.0 | v2": {
+      "redis": {
+        "n": 500,
+        "correct": 488,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 12,
+        "brier": 0.0012
+      },
+      "repo": {
+        "n": 225,
+        "correct": 225,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0.0002
+      },
+      "hard": {
+        "n": 120,
+        "correct": 113,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 7,
+        "brier": 0.0306
+      }
+    }
+  }
+}

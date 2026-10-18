@@ -4,10 +4,11 @@
  *
  * No Node built-ins here — runs in Workers and browsers too.
  */
+import { factsForFiles, checkFactSpecs } from "./facts.mjs";
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.7.0" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.8.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -138,8 +139,8 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
     defs.push(
       { name: "jev_verify", description: "Ask TypeSafe Jev (calibrated System One model) whether a QUESTION holds given `state`; appends a cheap JEV_NOUL proof.",
         inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG, instructions: { type: "string" }, channel: CHANNEL_ARG }, required: ["id"] } },
-      { name: "jev_verify_files", description: "Per-file verification: `files` = {path: content}. Each open question sees only the files in its question_spec.reads; proofs record per-file hashes.",
-        inputSchema: { type: "object", properties: { files: { type: "object", additionalProperties: { type: "string" } }, ids: { type: "array", items: { type: "string" } }, rules: { type: "string" } }, required: ["files"] } },
+      { name: "jev_verify_files", description: "Per-file verification: `files` = {path: content}. Each open question sees only the files in its question_spec.reads (plus its focus/criteria); proofs record per-file hashes. `quarantine` frames files as untrusted data (use for untrusted input); `facts` = {path: [{name, extract, key|path|pattern, default?}]} adds values computed by trusted extractors (sizes, durations, last directive, env, json, count).",
+        inputSchema: { type: "object", properties: { files: { type: "object", additionalProperties: { type: "string" } }, ids: { type: "array", items: { type: "string" } }, rules: { type: "string" }, quarantine: { type: "boolean" }, strip_comments: { type: "boolean", description: "default true: full-line comments are removed before Jev reads (comment-only injections produced 13–19% wrong GOs without this)" }, facts: { type: "object", additionalProperties: { type: "array", items: { type: "object" } } } }, required: ["files"] } },
       { name: "jev_verify_open", description: "Speculative fan-out: verify every open QUESTION against one shared `state` in a single Jev request. Answers are cached by (state hash, question) when a cache is configured.",
         inputSchema: { type: "object", properties: { state: STATE_ARG, ids: { type: "array", items: { type: "string" } }, channel: CHANNEL_ARG } } }
     );
@@ -236,7 +237,7 @@ export function createMcp({
         if (args.files) return orch.invalidateChangedFiles(lattice, { files: args.files, reason: args.reason });
         return orch.invalidateStale(lattice, { state: args.state, channel: args.channel, reason: args.reason });
       }
-      case "jev_verify_files": return orch.verifyFiles(lattice, { jev, files: args.files, ids: args.ids, rules: args.rules });
+      case "jev_verify_files": { const fe = args.facts ? Object.entries(args.facts).flatMap(([f, sp]) => checkFactSpecs(sp, `facts["${f}"]`)) : []; if (fe.length) return { ok: false, error: fe.join("; ") }; } return orch.verifyFiles(lattice, { jev, files: args.files, ids: args.ids, rules: args.rules, quarantine: args.quarantine === true, stripComments: args.strip_comments !== false, facts: args.facts ? factsForFiles(args.files, args.facts) : null });
       case "jev_list_nodes":
         return { ok: true, nodes: lattice.listNodes().map(n => lattice._nodeSummary(n)).map(s => ({ ...s, verdict: s.node_type === "QUESTION" ? lattice.evaluateGoNoGo(s.id).verdict : undefined })) };
       case "jev_get_node": return tools.getNode({ id: args.id });

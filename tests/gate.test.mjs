@@ -100,3 +100,49 @@ test("CLI: check-config, offline gate exit codes, usage errors", () => {
   assert.equal(cli("gate", "--config", "nope.json").code, 2);
   assert.match(cli("version").out, /^\d+\.\d+\.\d+/);
 });
+
+test("facts, quarantine, focus and criteria reach the verifier; changing criteria re-asks", async () => {
+  const { dir, cfg, state } = workspace();
+  fs.writeFileSync(path.join(dir, "deploy/redis.conf"), "port 0\ntls-port 6380\nmaxmemory 2gb");
+  const seen = [];
+  const jev = { model: "spy", async nouls(st, items) { seen.push({ st, items }); const o = { _model: "spy" }; for (const it of items) o[it.key] = { p: 0.97 }; return o; } };
+  const c = { ...cfg, quarantine: true, facts: { "deploy/redis.conf": [{ name: "maxmemory_bytes", extract: "size", key: "maxmemory" }] } };
+  c.gates = [{ ...cfg.gates[0], focus: "the tls-port directive", criteria: { true: "an uncommented tls-port line", false: { what: "no tls-port", not_for: "comments" } } }];
+  const r1 = await runGate({ cfg: c, root: dir, statePath: state, jev });
+  assert.equal(r1.pass, true);
+  const { st, items } = seen[0];
+  assert.ok(st.untrusted_files && st.policy, "quarantined frame");
+  assert.equal(st.file_descriptions["deploy/redis.conf"], "Redis server configuration (redis.conf syntax)");
+  assert.deepEqual(st.derived_facts, { "deploy/redis.conf": { maxmemory_bytes: 2147483648 } });
+  assert.deepEqual(items[0].instructions, { question: c.gates[0].question, focus: "the tls-port directive" });
+  assert.equal(items[0].criteria.false.not_for, "comments");
+  await runGate({ cfg: c, root: dir, statePath: state, jev });
+  assert.equal(seen.length, 1, "unchanged → no call");
+  c.gates[0].criteria = { true: "a tls-port line" };
+  await runGate({ cfg: c, root: dir, statePath: state, jev });
+  assert.equal(seen.length, 2, "changed criteria → the gate is asked again");
+});
+
+test("loadConfig validates facts, quarantine, focus and criteria", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "jev-cfg-"));
+  const f = path.join(dir, "c.json");
+  fs.writeFileSync(f, JSON.stringify({ quarantine: "yes", facts: { "a.conf": [{ name: "x", extract: "nope" }] }, gates: [{ id: "a", question: "q?", reads: ["a.conf"], focus: 3, criteria: { maybe: 1 } }] }));
+  const { errors } = loadConfig(f);
+  assert.equal(errors.length, 4, errors.join("\n"));
+});
+
+test("lintGates: GO on empty files is an error, a lean is a warning, wide reads and negations are noted", async () => {
+  const { lintGates } = await import("../gate.mjs");
+  const jev = { async nouls(st, items) { const o = {}; for (const it of items) o[it.key] = { p: /DEBUG/.test(JSON.stringify(it.instructions)) ? 0.95 : /LOG/.test(JSON.stringify(it.instructions)) ? 0.65 : 0.05 }; return o; } };
+  const cfg = { gates: [
+    { id: "debug", question: "Is DEBUG disabled?", reads: ["app.env"] },
+    { id: "log", question: "Is LOG_LEVEL info?", reads: ["app.env"] },
+    { id: "tls", question: "Is TLS enabled?", reads: ["a", "b", "c", "d"] }
+  ] };
+  const r = await lintGates({ cfg, jev });
+  assert.equal(r.ok, false);
+  const by = l => r.findings.filter(f => f.level === l).map(f => f.gate).sort();
+  assert.deepEqual(by("error"), ["debug"]);
+  assert.deepEqual(by("warn"), ["log", "tls"]);
+  assert.deepEqual(by("info"), ["debug"]);
+});

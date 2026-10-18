@@ -214,6 +214,24 @@ Narrative in [JOURNAL.md](JOURNAL.md) §5.
 | Gate conformance vectors (`conformance/`) | 27 hand-computed cases all matched the reference implementation. Writing them found a **spec error**: GATE-SEMANTICS said an OPEN margin is always ≤ 0, but a COORDINATED gate short of `required` has a positive margin (0.14 in the vector). The spec was fixed. |
 | Bug found while productising grouping | In R4-B's experiment code, derived answers were keyed by question only, so if two groups mapped the same question the later one silently overwrote the earlier. `grouping.mjs` keys them by (group, question) and has a regression test. R4-B's saved groups map each question exactly once (checked), so its numbers stand; the script now keeps the first mapping instead of the last. |
 
+## 2026-10-18: round 6 (v0.8): learning TypeSafe Jev
+The guide distilled from this round: [guides/typesafe.md](guides/typesafe.md). Web research covered TypeSafe's docs index and about 10 public third-party evaluations.
+
+| experiment | headline |
+|---|---|
+| API probes | Score `criteria` is a **list**; Noul `criteria` is `{true, false}`; the schema is strict at the top level; `jev-preview` serves 1.14.0; 800 questions in one call took 253 ms; 60 concurrent calls all succeeded; the context limit is 32k tokens per question (262k with the long-context header, where 512 KB worked with the needle found); gzip is accepted (81 KB → 4 KB). |
+| `typesafe-lab.mjs` (300 questions) | Framing: Brier 0.0153 for a bare string → **0.0055** when the content is described. Batching vs alone vs 30 distractors: \|Δp\| 0.0034 (no interference). Negated questions: the only wrong GOs (2). Naive injection: 1 wrong GO, mostly pushed to OPEN. |
+| `typesafe-hard.mjs` / `hard-gen.mjs` (8 families) | Jev **fails safe**: of 800 answers, only 1–2 wrong GOs. Units are the weakest family (15–17 of 25 decided). Reading rules fix overrides (11 → 21–25) and defaults (12 → 25). |
+| `typesafe-levers.mjs` (200 cases; 400 on 1.14) | Out of 200: plain 179, criteria 182, structured instructions 185, **code facts 198** (Brier 0.0189 → 0.0011), three-way Choice 191 with 1 wrong GO. On 1.14 with 400 cases: facts 393/400, 0 wrong. Criteria hurt units (20 → 12). |
+| `typesafe-ensemble.mjs` (400 × 2 framings × 2 streams) | The median of 6 in-call paraphrases decided 372 → 381; the mean was worse. 0 errors in every arm, so the bench was too easy to test error detection. |
+| `typesafe-probes.mjs` | Choice option order: **0 flips in 90**. With empty files, no gate question went GO (max p 0.61). 3 irrelevant files: correct 275 → 252, Brier ×2.3. |
+| `typesafe-redteam.mjs` | 12 MiniMax payloads × 30: plain 1/360 wrong GO; quarantine 0; quarantine + criteria 0, with undecided 158 → 44. Poisoned facts: Jev followed a wrong fact 9/60 times and the file 0/60. |
+| `typesafe-redteam-adaptive.mjs` (MiniMax-M3, 3 rounds) | Plain frame: up to **33/360** wrong GOs per round. Defended on 1.13.0: 0 wrong GOs, but up to 324/360 undecided. Defended on 1.14.0: **2 wrong GOs** in round 3 (the "systemd EnvironmentFile supplies the settings" story). |
+| `typesafe-strip.mjs` (21 payloads × 30) | **Stripping comments: 0 wrong GOs and 0 undecided on both models**, against 83 / 119 wrong GOs plain. Clean accuracy unchanged (466 / 477–484 of 500). Now the default. |
+| `typesafe-frame-v2.mjs` + ablation | The full quarantine frame cost 1.13.0 some decisiveness on clean input (478 → 459); the individual parts are within noise. It stays opt-in. |
+| `typesafe-product.mjs` (through `verifyFiles` + `facts.mjs`) | 106 → **117/120** correct on 1.13.0 and 109 → 116 on 1.14.0, 0 wrong. |
+| MiniMax-M3 review of `facts.mjs` (falsifiable format) | 4 runnable cases, **4/4 real**, all one root cause: nginx `;` terminators (`10k;` → null). Fixed, with a test. The first attempt failed when the reasoning used the whole 24k token budget; it succeeded at 60k. |
+
 ## Backlog
 1. ~~Proof cache~~: done.
 2. ~~Compiled-first scheduler~~: done. Ship refute-only.
@@ -226,7 +244,12 @@ Narrative in [JOURNAL.md](JOURNAL.md) §5.
 
 Round 5: ~~metamorphic default + generation retries~~ (R5-A), ~~grouping rollout~~ (R5-B, module + auto-trigger), ~~automatic tolerance~~ (R5-C), ~~tool profiles~~ (R5-D), plus R5-E (model pinning).
 
-Next (round 6):
+Next (round 7):
+- Live Groq and DeepSeek paths (providers ready; keys pending): an independent fast LLM proof path, bulk paraphrase/attack generation, and DeepSeek prefix-cache accounting.
+- Non-comment injection: inline `# …`, unknown directives, Markdown prose; is there a trusted normaliser per format?
+- A harder error bench where Jev actually errs, to test whether negation gaps and ensemble spread predict errors.
+
+Carried over from the round-6 plan:
 - **Wrong NOs under drift (from R5-A).** Spot-check compiled NOs as well as YESes, and quarantine a predicate whose NO rate jumps against its history (a cheap drift signal that needs no teacher). Measure on the shifted stream.
 - **Grouping inside `jev gate`:** plan groups once per config change, store accepted mappings in the state, and ask Choices on later runs. Measure the cost per run and the stability of the derived verdicts across runs.
 - **Upgrade rehearsal:** a `jev gate --compare-model jev-1.14.0` mode that reports which verdicts would move before a pin changes (R5-E shows that a few percent do).

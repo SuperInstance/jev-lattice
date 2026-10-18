@@ -7,8 +7,13 @@
  *     "threshold": 0.9,
  *     "gates": [
  *       { "id": "redis-tls", "question": "Is TLS enabled (a tls-port is configured)?", "reads": ["deploy/redis.conf"] },
- *       { "id": "no-debug",  "question": "Is DEBUG disabled?", "reads": ["deploy/app.env"], "spec": { "confidence_threshold": 0.95 } }
- *     ]
+ *       { "id": "no-debug",  "question": "Is DEBUG disabled?", "reads": ["deploy/app.env"], "spec": { "confidence_threshold": 0.95 } },
+ *       { "id": "mem", "question": "Is maxmemory at least 1 GiB?", "reads": ["deploy/redis.conf"],
+ *         "focus": "the maxmemory directive", "criteria": { "true": "...", "false": { "what": "...", "not_for": "..." } } }
+ *     ],
+ *     "facts": { "deploy/redis.conf": [{ "name": "maxmemory_bytes", "extract": "size", "key": "maxmemory" }] },
+ *     "quarantine": false,         // true for untrusted input (e.g. PRs from forks)
+ *     "strip_comments": true       // default: drop full-line comments before Jev reads (facts still see them)
  *   }
  *
  * Flow: load previous state → (re)register gates → read files → retire proofs whose files
@@ -19,7 +24,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { JEVLattice } from "./jev-core.js";
-import { verifyFiles, invalidateChangedFiles } from "./orchestrator.mjs";
+import { verifyFiles, invalidateChangedFiles, frameEvidence, jevQuestion } from "./orchestrator.mjs";
+import { checkFactSpecs, factsForFiles } from "./facts.mjs";
 
 export function loadConfig(file) {
   const cfg = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -32,7 +38,15 @@ export function loadConfig(file) {
     else ids.add(g.id);
     if (!g?.question || typeof g.question !== "string") errors.push(`gates[${i}].question: required string`);
     if (!Array.isArray(g?.reads) || g.reads.length === 0) errors.push(`gates[${i}].reads: required non-empty array of file paths`);
+    if (g?.focus !== undefined && typeof g.focus !== "string") errors.push(`gates[${i}].focus: must be a string`);
+    if (g?.criteria !== undefined && (typeof g.criteria !== "object" || g.criteria === null || Array.isArray(g.criteria) || !("true" in g.criteria || "false" in g.criteria))) errors.push(`gates[${i}].criteria: an object with "true" and/or "false"`);
   }
+  if (cfg.facts !== undefined) {
+    if (typeof cfg.facts !== "object" || cfg.facts === null || Array.isArray(cfg.facts)) errors.push("facts: an object mapping file paths to fact specs");
+    else for (const [file, specs] of Object.entries(cfg.facts)) errors.push(...checkFactSpecs(specs, `facts["${file}"]`));
+  }
+  if (cfg.quarantine !== undefined && typeof cfg.quarantine !== "boolean") errors.push("quarantine: must be true or false");
+  if (cfg.strip_comments !== undefined && typeof cfg.strip_comments !== "boolean") errors.push("strip_comments: must be true or false");
   if (cfg.threshold !== undefined && !(cfg.threshold >= 0 && cfg.threshold <= 1)) errors.push("threshold: must be in [0, 1]");
   return { cfg, errors };
 }
@@ -55,11 +69,12 @@ export async function runGate({ cfg, root = ".", statePath = null, jev = null })
   const nodeFor = {};
   for (const g of cfg.gates) {
     const tag = `gate:${g.id}`;
-    const spec = { confidence_threshold: threshold, ...(g.spec || {}), reads: g.reads };
+    const spec = { confidence_threshold: threshold, ...(g.spec || {}), reads: g.reads, ...(g.focus ? { focus: g.focus } : {}), ...(g.criteria ? { criteria: g.criteria } : {}) };
     const existing = L.listNodes().find(n => n.tags.includes(tag));
+    // anything that changes what is asked replaces the node (and its proofs)
+    const asked = q => JSON.stringify([q.reads, q.confidence_threshold, q.focus ?? null, q.criteria ?? null]);
     const sameSpec = existing && existing.text === g.question &&
-      JSON.stringify(existing.question_spec.reads) === JSON.stringify(g.reads) &&
-      existing.question_spec.confidence_threshold === spec.confidence_threshold;
+      asked(existing.question_spec) === asked({ ...spec, focus: spec.focus ?? null, criteria: spec.criteria ?? null });
     if (existing && !sameSpec) L.prune(existing.id);
     nodeFor[g.id] = sameSpec ? existing : L.ingest({ text: g.question, tags: [tag], question_spec: spec, linkToNearest: false }).node;
   }
@@ -81,7 +96,7 @@ export async function runGate({ cfg, root = ".", statePath = null, jev = null })
     // only gates whose files all exist can be verified; the rest stay OPEN (fail closed)
     const ids = cfg.gates.filter(g => g.reads.every(p => p in files)).map(g => nodeFor[g.id].id);
     try {
-      const r = await verifyFiles(L, { jev, files, ids, rules: cfg.rules || null });
+      const r = await verifyFiles(L, { jev, files, ids, rules: cfg.rules || null, quarantine: cfg.quarantine === true, stripComments: cfg.strip_comments !== false, facts: cfg.facts ? factsForFiles(files, cfg.facts) : null });
       verified = r.verified;
     } catch (e) {
       verifierError = e.message;
@@ -101,6 +116,39 @@ export async function runGate({ cfg, root = ".", statePath = null, jev = null })
   }
   const pass = results.every(r => r.go) && missing.length === 0 && !verifierError;
   return { pass, results, missing, verifierError, drift: drift.changedFiles, verified };
+}
+
+/**
+ * Gate lint (R6): ask every gate about EMPTY versions of its files, in one call. A gate that is
+ * decided with no evidence answers from priors: GO-on-empty means "absent = pass" (often a
+ * phrasing problem, e.g. "Is DEBUG disabled?" leaned yes on an empty env file); a lean
+ * (p ≥ 0.6) is reported as a warning. Also flags gates that read many files (irrelevant files
+ * doubled Brier) and negated phrasing (negations produced the only wrong GOs in R6).
+ */
+export async function lintGates({ cfg, jev }) {
+  const threshold = cfg.threshold ?? 0.9;
+  const findings = [];
+  const negated = /\b(not|no|never|without|disabled|absent|missing|isn't|doesn't)\b/i;
+  for (const g of cfg.gates) {
+    if (g.reads.length > 3) findings.push({ gate: g.id, level: "warn", issue: `reads ${g.reads.length} files; each extra file dilutes the evidence (R6: 3 unrelated files doubled Brier)` });
+    if (negated.test(g.question)) findings.push({ gate: g.id, level: "info", issue: "negated phrasing; positive phrasing was more reliable in R6 (high p should mean the safe state is present)" });
+  }
+  if (jev) {
+    const items = cfg.gates.map(g => ({ key: g.id, ...jevQuestion({ text: g.question, question_spec: { focus: g.focus ?? null, criteria: g.criteria ?? null } }) }));
+    const groups = new Map();
+    for (const g of cfg.gates) { const k = [...g.reads].sort().join("\n"); (groups.get(k) || groups.set(k, []).get(k)).push(g.id); }
+    for (const [k, ids] of groups) {
+      const empty = Object.fromEntries(k.split("\n").map(p => [p, ""]));
+      const ans = await jev.nouls(frameEvidence(empty, { rules: cfg.rules || null }), items.filter(it => ids.includes(it.key)));
+      for (const id of ids) {
+        const p = ans[id]?.p;
+        if (typeof p !== "number") continue;
+        if (p >= threshold) findings.push({ gate: id, level: "error", p, issue: "GO with empty files: the gate passes when its evidence is absent. Rephrase so absence is not a pass, or add a fact with an explicit default." });
+        else if (p >= 0.6) findings.push({ gate: id, level: "warn", p, issue: "leans yes with empty files; the verdict may rest on priors rather than evidence" });
+      }
+    }
+  }
+  return { ok: !findings.some(f => f.level === "error"), findings };
 }
 
 export function formatResult(run, format = "text") {

@@ -25,6 +25,28 @@
 
 `jev check-config` validates the file and reports every problem at once.
 
+### Hard questions: facts, focus, criteria, quarantine
+Jev reads literally and is weakest at units, last-wins overrides, defaults and counting. Let code compute those values and Jev judge them ([typesafe.md](typesafe.md) §3):
+```json
+{
+  "facts": { "deploy/redis.conf": [
+    { "name": "maxmemory_bytes", "extract": "size", "key": "maxmemory" },
+    { "name": "protected_mode", "extract": "directive", "key": "protected-mode", "default": "yes (default)" } ] },
+  "quarantine": false,
+  "gates": [
+    { "id": "mem", "question": "Is maxmemory at least 1 GiB (1073741824 bytes)?", "reads": ["deploy/redis.conf"],
+      "focus": "the maxmemory directive",
+      "criteria": { "true": "maxmemory converts to 1073741824 bytes or more",
+                    "false": { "what": "fewer bytes, or not set", "not_for": "commented-out lines" } } }
+  ]
+}
+```
+- **Extractors** (`facts.mjs`): `directive`, `size` (Redis units), `duration` (ms/s/m/h), `env`, `json` (dotted path), `count` and `regex`. A missing value becomes `"not set"` unless you give a `default`. On the hard bench these took gates from 106 to 117 correct out of 120, with 0 wrong.
+- **Facts are trusted.** Jev follows a fact over the file, so a wrong extractor means a wrong verdict. Prefer the built-in extractors, which are unit-tested.
+- **`strip_comments`** (default `true`) removes full-line comments before Jev reads the files. Comment-only injection attacks produced 13–19% wrong GOs without it, and 0% with it, at no cost in clean accuracy. Set it to `false` only for questions about comments.
+- **`quarantine: true`** frames the files as untrusted data and tells Jev that comments are never instructions. Use it when the files come from people you don't control (forks, user uploads): under 360 injection attempts it took wrong GOs from 1 to 0.
+- **`jev lint`** asks each gate about empty files and flags gates that would pass with no evidence, as well as wide `reads` and negated phrasing. Run it after editing gates.
+
 ## 2. Run it locally
 ```bash
 export TYPESAFE_AI_TOKEN=…

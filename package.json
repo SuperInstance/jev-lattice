@@ -1,6 +1,6 @@
 {
   "name": "jev-lattice",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Deterministic go/no-go gates over calibrated evidence: TypeSafe Jev verification, proof cache, per-file drift, MCP server, CLI + GitHub Action, Cloudflare Durable Object deployment",
   "type": "module",
   "main": "jev-core.js",
@@ -21,6 +21,10 @@
       "types": "./types/gate.d.ts",
       "default": "./gate.mjs"
     },
+    "./facts": {
+      "types": "./types/facts.d.ts",
+      "default": "./facts.mjs"
+    },
     "./mcp": {
       "types": "./types/mcp.d.ts",
       "default": "./mcp-core.mjs"
@@ -31,6 +35,9 @@
     },
     "./providers/minimax": "./providers/minimax.mjs",
     "./providers/workers-ai": "./providers/workers-ai.mjs",
+    "./providers/groq": "./providers/groq.mjs",
+    "./providers/deepseek": "./providers/deepseek.mjs",
+    "./providers/openai-compatible": "./providers/openai-compatible.mjs",
     "./experimental/compiled": "./compiled.mjs",
     "./experimental/senses": "./senses.mjs",
     "./experimental/calibration": "./calibration.mjs",
@@ -73,7 +80,12 @@
     "typecheck": "tsc -p types/tsconfig.json",
     "live:model-upgrade": "node experiments/model-upgrade.mjs",
     "live:compile-reliability": "node experiments/compile-reliability.mjs",
-    "live:grouping-repo": "node experiments/grouping-repo.mjs"
+    "live:grouping-repo": "node experiments/grouping-repo.mjs",
+    "live:typesafe-lab": "node experiments/typesafe-lab.mjs",
+    "live:typesafe-hard": "node experiments/typesafe-hard.mjs",
+    "live:typesafe-levers": "node experiments/typesafe-levers.mjs",
+    "live:typesafe-redteam": "node experiments/typesafe-redteam.mjs",
+    "live:typesafe-product": "node experiments/typesafe-product.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
@@ -111,6 +123,7 @@
     "types/",
     "conformance/",
     "worker/control.mjs",
+    "facts.mjs",
     "bin/",
     "providers/",
     "worker/index.mjs",

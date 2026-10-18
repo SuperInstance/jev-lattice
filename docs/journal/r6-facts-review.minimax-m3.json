@@ -1,0 +1,34 @@
+```json
+{
+  "cases": [
+    {
+      "extractor": "directive",
+      "text": "listen 80;\n",
+      "spec": {"name": "listen_val", "extract": "directive", "key": "listen"},
+      "expected": "80",
+      "why": "Nginx-style values use ';' as a statement terminator, not part of the value, but lastDirective never strips it."
+    },
+    {
+      "extractor": "size",
+      "text": "client_max_body_size 10k;\n",
+      "spec": {"name": "cms", "extract": "size", "key": "client_max_body_size"},
+      "expected": 10000,
+      "why": "The trailing ';' is left in the value, so parseSize receives '10k;' which fails its regex and returns null instead of 10000."
+    },
+    {
+      "extractor": "duration",
+      "text": "keepalive_timeout 60s;\n",
+      "spec": {"name": "kat", "extract": "duration", "key": "keepalive_timeout"},
+      "expected": 60000,
+      "why": "The trailing ';' is left in the value, so parseDuration receives '60s;' which fails its regex and returns null instead of 60000."
+    },
+    {
+      "extractor": "directive",
+      "text": "worker_connections 1024;\n",
+      "spec": {"name": "wc", "extract": "directive", "key": "worker_connections"},
+      "expected": "1024",
+      "why": "Same nginx-semicolon bug: the directive value keeps the terminating ';'."
+    }
+  ]
+}
+```

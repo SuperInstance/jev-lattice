@@ -1,0 +1,145 @@
+{
+  "model": "jev-1.13.0",
+  "N": 40,
+  "K": 5,
+  "at": "2026-10-18T15:24:52.600Z",
+  "arms": {
+    "in-dist | files+rules": {
+      "single": {
+        "brier": 0.0054,
+        "decided": 372,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 28
+      },
+      "mean": {
+        "brier": 0.0103,
+        "decided": 306,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 94
+      },
+      "median": {
+        "brier": 0.0041,
+        "decided": 381,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 19
+      },
+      "unanimous": {
+        "decided": 270,
+        "wrong": 0,
+        "wrongGo": 0
+      },
+      "single_errors": 0,
+      "single_errors_with_spread_gt_0_1": 0,
+      "flagged_by_spread_gt_0_1": 102
+    },
+    "in-dist | described": {
+      "single": {
+        "brier": 0.0051,
+        "decided": 379,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 21
+      },
+      "mean": {
+        "brier": 0.0104,
+        "decided": 301,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 99
+      },
+      "median": {
+        "brier": 0.0037,
+        "decided": 382,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 18
+      },
+      "unanimous": {
+        "decided": 270,
+        "wrong": 0,
+        "wrongGo": 0
+      },
+      "single_errors": 0,
+      "single_errors_with_spread_gt_0_1": 0,
+      "flagged_by_spread_gt_0_1": 106
+    },
+    "shifted | files+rules": {
+      "single": {
+        "brier": 0.0027,
+        "decided": 376,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 24
+      },
+      "mean": {
+        "brier": 0.0086,
+        "decided": 307,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 93
+      },
+      "median": {
+        "brier": 0.0028,
+        "decided": 384,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 16
+      },
+      "unanimous": {
+        "decided": 269,
+        "wrong": 0,
+        "wrongGo": 0
+      },
+      "single_errors": 0,
+      "single_errors_with_spread_gt_0_1": 0,
+      "flagged_by_spread_gt_0_1": 109
+    },
+    "shifted | described": {
+      "single": {
+        "brier": 0.0026,
+        "decided": 378,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 22
+      },
+      "mean": {
+        "brier": 0.0088,
+        "decided": 299,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 101
+      },
+      "median": {
+        "brier": 0.0023,
+        "decided": 386,
+        "wrong": 0,
+        "wrongGo": 0,
+        "open": 14
+      },
+      "unanimous": {
+        "decided": 268,
+        "wrong": 0,
+        "wrongGo": 0
+      },
+      "single_errors": 0,
+      "single_errors_with_spread_gt_0_1": 0,
+      "flagged_by_spread_gt_0_1": 110
+    }
+  },
+  "usage": {
+    "jev": {
+      "calls": 160,
+      "input_tokens": 282214,
+      "output_tokens": 179840,
+      "questions": 9600
+    },
+    "minimax": {
+      "calls": 2,
+      "prompt_tokens": 908,
+      "completion_tokens": 10751
+    }
+  }
+}

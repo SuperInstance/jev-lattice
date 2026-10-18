@@ -27,7 +27,10 @@ export function createJev({
   maxRetries = 4,
   timeoutMs = 60000,
   // 262k per-request/per-question context instead of 64k/32k (TypeSafe long-context header)
-  longContext = false
+  longContext = false,
+  // gzip request bodies at or above this size (the API accepts Content-Encoding: gzip; ~20× smaller
+  // for config text). 0 disables. Skipped where CompressionStream is unavailable.
+  gzipMinBytes = 16384
 } = {}) {
   if (!apiKey) throw new Error("Jev: missing api key (TYPESAFE_AI_TOKEN)");
   const usage = { calls: 0, input_tokens: 0, output_tokens: 0, questions: 0 };
@@ -37,7 +40,16 @@ export function createJev({
    * Retries 429/529/5xx with exponential backoff as the API docs recommend.
    */
   async function ask(state, questions, { model: m = model } = {}) {
-    const body = JSON.stringify({ state, model: m, questions });
+    const json = JSON.stringify({ state, model: m, questions });
+    let body = json, encoding = null;
+    if (gzipMinBytes && json.length >= gzipMinBytes && typeof CompressionStream === "function") {
+      try {
+        body = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+        encoding = "gzip";
+      } catch {
+        body = json;
+      }
+    }
     let lastErr;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const ctrl = new AbortController();
@@ -49,6 +61,7 @@ export function createJev({
           headers: {
             Authorization: `Bearer ${apiKey}`,
             "Content-Type": "application/json",
+            ...(encoding ? { "Content-Encoding": encoding } : {}),
             ...(longContext ? { "TypeSafe-Danger-Zone-Long-Context": "true" } : {})
           },
           body,
@@ -69,8 +82,13 @@ export function createJev({
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = new Error(`Jev error ${res.status}: ${JSON.stringify(data).slice(0, 400)}`);
+        const rid = res.headers.get?.("x-typesafe-request-id");
+        const tooLong = data?.detail?.error_type === "max_tokens_exceeded";
+        const hint = tooLong ? (longContext ? " (state exceeds even the long-context limit; narrow `reads`)" : " (state + question exceeds 32k tokens per question / 64k per request; narrow `reads` or set longContext)") : "";
+        const err = new Error(`Jev error ${res.status}${hint}: ${JSON.stringify(data).slice(0, 400)}${rid ? ` [request ${rid}]` : ""}`);
         err.status = res.status;
+        err.code = data?.detail?.error_type;
+        err.requestId = rid || null;
         throw err;
       }
       usage.calls++;

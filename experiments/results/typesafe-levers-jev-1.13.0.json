@@ -1,0 +1,437 @@
+{
+  "model": "jev-1.13.0",
+  "per": 25,
+  "at": "2026-10-18T15:26:38.175Z",
+  "arms": {
+    "base": {
+      "total": {
+        "n": 200,
+        "correct": 179,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 21,
+        "brier": 0.0189
+      },
+      "families": {
+        "units": {
+          "n": 25,
+          "correct": 20,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 5
+        },
+        "override": {
+          "n": 25,
+          "correct": 22,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 3
+        },
+        "count": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 25,
+          "correct": 15,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 10
+        },
+        "duration": {
+          "n": 25,
+          "correct": 24,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "nested": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "default": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "criteria": {
+      "total": {
+        "n": 200,
+        "correct": 182,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 18,
+        "brier": 0.0086
+      },
+      "families": {
+        "units": {
+          "n": 25,
+          "correct": 12,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 13
+        },
+        "override": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "count": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 25,
+          "correct": 24,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "nested": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "default": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "structured": {
+      "total": {
+        "n": 200,
+        "correct": 185,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 15,
+        "brier": 0.0125
+      },
+      "families": {
+        "units": {
+          "n": 25,
+          "correct": 17,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 8
+        },
+        "override": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "count": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "duration": {
+          "n": 25,
+          "correct": 24,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "nested": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "default": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "both": {
+      "total": {
+        "n": 200,
+        "correct": 185,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 15,
+        "brier": 0.0088
+      },
+      "families": {
+        "units": {
+          "n": 25,
+          "correct": 14,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 11
+        },
+        "override": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "count": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 25,
+          "correct": 24,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "nested": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 25,
+          "correct": 24,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "default": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "facts": {
+      "total": {
+        "n": 200,
+        "correct": 198,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.0011
+      },
+      "families": {
+        "units": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "override": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "count": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 25,
+          "correct": 24,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "nested": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 25,
+          "correct": 24,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "default": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "choice3": {
+      "total": {
+        "n": 200,
+        "correct": 191,
+        "wrongGo": 1,
+        "wrongNo": 0,
+        "open": 8,
+        "brier": 0.0152
+      },
+      "families": {
+        "units": {
+          "n": 25,
+          "correct": 20,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 5
+        },
+        "override": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "count": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "nested": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 25,
+          "correct": 23,
+          "wrongGo": 1,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "default": {
+          "n": 25,
+          "correct": 25,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    }
+  },
+  "negation": {
+    "mean_gap": 0.1154,
+    "errors": 0,
+    "errors_with_gap_gt_0_2": 0,
+    "decided_with_gap_gt_0_2": 13,
+    "per_family_gap": {
+      "units": 0.1,
+      "override": 0.106,
+      "count": 0.052,
+      "xref": 0.179,
+      "duration": 0.098,
+      "nested": 0.061,
+      "range": 0.144,
+      "default": 0.182
+    }
+  },
+  "usage": {
+    "calls": 1400,
+    "input_tokens": 580931,
+    "output_tokens": 36000,
+    "questions": 1600
+  }
+}

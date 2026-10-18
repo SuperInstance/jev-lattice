@@ -43,7 +43,7 @@ Names are prefixed `jev_` on the wire. Availability depends on what's configured
 | `jev_capacity` | stdio | — | Host probe + policy tier |
 | `jev_verify` | Jev | **id**, state, instructions, channel | One question → `JEV_NOUL` proof |
 | `jev_verify_open` | Jev | state, ids, channel | All open questions, one shared state, one call |
-| `jev_verify_files` | Jev | **files**, ids, rules | Per-file evidence via `question_spec.reads` |
+| `jev_verify_files` | Jev | **files**, ids, rules, quarantine, facts | Per-file evidence via `question_spec.reads` (+ `focus`, `criteria`); `facts` = {path: [extractor specs]} |
 | `jev_minimax_proof` | MiniMax | **id**, state | LLM chain-of-thought proof |
 | `jev_decompose` | MiniMax | **id**, maxSub | Sub-questions as BINARY children |
 | `jev_compile` | Jev or MiniMax | **id**, state | Cheap-first loop: Jev → MiniMax → decompose → roll-up |

@@ -804,8 +804,19 @@ function normalizeQuestionSpec(spec) {
     // A decided verdict whose margin is below this (or below the decider's measured spread) is fragile
     fragility_band: clamp(num(spec.fragility_band, 0.02), 0, 1),
     // Optional: fragile verdicts need corroboration by an extra independent path
-    require_firm: spec.require_firm === true
+    require_firm: spec.require_firm === true,
+    // Optional, for verifiers (never read by the gate): what Jev should look at, and what
+    // counts as yes / no (TypeSafe Noul criteria). R6: criteria halved Brier on hard cases.
+    focus: typeof spec.focus === "string" && spec.focus.trim() ? spec.focus : null,
+    criteria: normalizeCriteria(spec.criteria)
   };
+}
+
+function normalizeCriteria(c) {
+  if (!c || typeof c !== "object" || Array.isArray(c)) return null;
+  const out = {};
+  for (const k of ["true", "false"]) if (c[k] !== undefined && c[k] !== null) out[k] = deepClone(c[k]);
+  return Object.keys(out).length ? out : null;
 }
 
 function normalizeSourceThresholds(t) {

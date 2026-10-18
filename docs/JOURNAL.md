@@ -336,3 +336,40 @@ R4-C's fixed `tolerance` was a fraction, which is wrong at both ends: `floor(3% 
 - P24 falsifiable review prompts · P25 hand-computed executable specs · P26 report both error directions · P27 let proposers abstain.
 - **Unit-testing code lifted out of an experiment** found a bug the experiment couldn't (5.6). Productising is itself a test.
 - **Every P0 change came with a live smoke check** (49 checks now). Writing a check first is how the rate-limiter period problem surfaced.
+
+---
+
+## Round 6 (v0.8): learning TypeSafe Jev by experiment
+
+### 6.0 Plan and division of labour
+- **The user's ask:** learn typesafe.ai through extensive use and research what others have done with it.
+- **Division of labour:**
+  - A research agent read TypeSafe's docs index and about 10 public evaluations.
+  - I probed the API directly in parallel.
+  - MiniMax wrote paraphrases and attacks, and reviewed the new extractor code.
+  - Jev answered about 40k questions.
+- **Mid-round instruction:** conserve Claude tokens and lean on MiniMax, TypeSafe, Cloudflare, Groq and DeepSeek. Groq and DeepSeek keys weren't in the session, so their providers were built and tested offline, and their live runs are queued for round 7.
+
+### 6.1 Probe before believing
+Three facts came from probing the API itself, not from documentation:
+- Score criteria must be a list.
+- Unknown top-level fields are rejected with a bare 400.
+- `jev-preview` currently serves 1.14.0.
+
+The research agent then supplied what probing can't: the Noul criteria shape, the limits, the price, and TypeSafe's own list of weak spots. **Each vendor claim was re-measured where it mattered.** The "leans toward the first option" claim did not reproduce on our questions (0 flips in 90 reorderings).
+
+### 6.2 Make the bench hard enough to teach something
+The redis bench had saturated: 0 errors in every arm of the ensemble experiment, so it could say nothing about error detection. The hard generator targets the documented weak spots (units, overrides, counting, cross-file references, defaults), with truth computed by code. Even there, Jev failed *safe* (it left questions undecided rather than answering wrongly). The useful measure became "decided-correct", and each lever was judged by how many undecided cases it resolved without adding errors.
+
+> **P28. When the judge stops making errors on your bench, the bench is done teaching. Build one aimed at the judge's documented weak spots, and measure what turns undecided into correct.**
+
+### 6.3 Facts are the strongest lever and the sharpest knife
+Code-computed facts resolved 19 of 21 undecided cases. The poisoned-facts arm was designed in the same run, because a lever this strong is also an attack surface: Jev followed wrong facts 9 of 60 times and never followed the file over them. Hence the rule in `facts.mjs`: plain, tested extractors, never model-written, "not set" rather than a guess. The first outside review of those extractors (MiniMax-M3, falsifiable format) found a real bug at once: nginx `;` terminators.
+
+### 6.4 The security result came from iterating the attacker
+One-shot attacks suggested framing was enough (1 wrong GO in 360). An adaptive attacker that saw its own scores found a story Jev couldn't check (settings supplied by a systemd `EnvironmentFile`) and broke the defended frame on 1.14.0. The fix wasn't a better argument to Jev but deleting the content: comments mean nothing to these formats, so trusted code strips them. That took wrong GOs to 0 on both models, with clean accuracy unchanged, and it is now the default.
+
+> **P29. Test defenses against an attacker who sees the scores. A defense that only argues with the attacker (framing, policies, criteria) moves with the model version; a defense that removes the attacker's channel doesn't.**
+
+### 6.5 Model-dependent results are the norm
+The quarantine frame was neutral on 1.14.0 and cost decisiveness on 1.13.0. Criteria helped cross-file questions and hurt unit questions. Every default chosen this round was checked on both models before it shipped (file descriptions on; quarantine opt-in; stripping on).

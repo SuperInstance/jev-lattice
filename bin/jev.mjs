@@ -5,6 +5,7 @@
  *   jev gate  [--config jev.gates.json] [--root .] [--state .jev/state.json]
  *             [--format text|json|markdown] [--offline]
  *   jev check-config [--config jev.gates.json]
+ *   jev lint  [--config jev.gates.json]     probe each gate with empty files (one Jev call per file set)
  *   jev mcp                      start the stdio MCP server
  *   jev version
  *
@@ -32,8 +33,8 @@ if (cmd === "version") {
 }
 if (cmd === "mcp") {
   await import(path.join(here, "..", "mcp-server.mjs"));
-} else if (cmd === "gate" || cmd === "check-config") {
-  const { loadConfig, runGate, formatResult } = await import(path.join(here, "..", "gate.mjs"));
+} else if (cmd === "gate" || cmd === "check-config" || cmd === "lint") {
+  const { loadConfig, runGate, formatResult, lintGates } = await import(path.join(here, "..", "gate.mjs"));
   const configPath = flag("config", "jev.gates.json");
   if (!fs.existsSync(configPath)) die(`config not found: ${configPath}`);
   let loaded;
@@ -47,6 +48,12 @@ if (cmd === "mcp") {
     const { createJev } = await import(path.join(here, "..", "providers", "jev.mjs"));
     const { cachedJev, createProofCache } = await import(path.join(here, "..", "proof-cache.mjs"));
     jev = cachedJev(createJev(), createProofCache({ ttlMs: Number(process.env.JEV_CACHE_TTL_MS) || 24 * 3600e3 }));
+  }
+  if (cmd === "lint") {
+    const r = await lintGates({ cfg: loaded.cfg, jev: has("offline") ? null : jev });
+    for (const f of r.findings) process.stdout.write(`${f.level.toUpperCase().padEnd(5)} ${f.gate}${f.p !== undefined ? ` (p=${f.p})` : ""}: ${f.issue}\n`);
+    process.stdout.write(r.findings.length ? `${r.findings.length} finding(s)\n` : "no findings\n");
+    process.exit(r.ok ? 0 : 1);
   }
   const run = await runGate({ cfg: loaded.cfg, root: flag("root", "."), statePath: flag("state", ".jev/state.json"), jev });
   process.stdout.write(formatResult(run, flag("format", "text")) + "\n");
