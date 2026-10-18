@@ -26,7 +26,7 @@
 | [guides/library-api.md](guides/library-api.md) | reference | every exported function by module |
 | [guides/typesafe.md](guides/typesafe.md) | how-to + measurements | using TypeSafe Jev well: API facts, weak spots and their fixes, injection, versions, checklist |
 | [guides/researchers.md](guides/researchers.md) | how-to | running and adding experiments, generators, delegating to MiniMax |
-| [TILES.md](TILES.md) | catalogue | T1–T53: reusable patterns, each with evidence |
+| [TILES.md](TILES.md) | catalogue | T1–T54: reusable patterns, each with evidence |
 | [RESEARCH-LOG.md](RESEARCH-LOG.md) | record | every experiment's numbers and interpretation |
 | [JOURNAL.md](JOURNAL.md) | record | how the tools were built: decisions, alternatives, mistakes, process lessons P1–P29 |
 | [journal/](journal/) | artefacts | prompts sent to MiniMax and its raw outputs, kept for review |

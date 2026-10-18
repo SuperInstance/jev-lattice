@@ -2,6 +2,16 @@
 
 All notable changes. Versions follow semver once v1.0 is reached; before that, minor versions may change APIs. The state schema stays importable forward.
 
+## 0.10.0
+### Security
+- `facts.mjs`: the flat `key` matcher took the *last* line with that key anywhere in a file. In YAML, an attacker-added nested key (`overrides: {server: {read_timeout: 500ms}}`) therefore became the "trusted" fact, and Jev followed it (4 of 20 wrong GOs). New: the `yaml` extractor and `path` for `size`/`duration` (a dotted path in a YAML block mapping). Fact specs that use `key` on a `.yml`/`.yaml` file are now **rejected** by `jev check-config`, `jev gate` and `jev_verify_files`.
+### Added
+- `GET /admin/health` (root): D1, R2, Durable Object and TypeSafe checks, with latencies.
+- `POST /admin/lattices {names}` (root): register lattices created before 0.9 for backup.
+- `scripts/metrics-report.mjs`: per-route requests, p50/p95 and 5xx counts from Analytics Engine, checked against the SLOs (exit 1 on a breach). The `slo` workflow runs it hourly.
+### Fixed
+- GitHub Action: the "Fail when gates are not GO" step now has `always()`. Without a status function GitHub implies `success()`, which skipped the step, and its error annotation, exactly when the gate failed.
+
 ## 0.9.1
 ### Fixed
 - GitHub Action: the Evaluate step now exits with the verifier's status, and the gate keys on the step outcome. Before, `set +e` made the step exit 0 on REFUTED, and a skipped step's missing outputs (null, which coerces to 0) let a gate that never ran pass (#4).

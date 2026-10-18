@@ -141,3 +141,8 @@ test("the Evaluate step still exits zero when every gate is GO", { skip: process
   assert.equal(res.status, 0, "an all-GO run must not fail");
   assert.match(fs.readFileSync(outputPath, "utf8"), /^pass=true$/m);
 });
+
+test("the fail step's condition carries always(), so its error is written after the gate step failed", () => {
+  // without a status function, GitHub prepends success(): the step would be skipped on failure
+  assert.match(failStep.if, /always\(\)/, `got: ${failStep.if}`);
+});

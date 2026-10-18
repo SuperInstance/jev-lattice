@@ -55,3 +55,17 @@ test("stripComments removes full-line comments for known formats only; frameEvid
   assert.equal(stripComments("app.env", "A=1 # inline stays"), "A=1 # inline stays");
   assert.equal(frameEvidence({ "a.conf": "# x\ny 1" }, { strip: true }).files["a.conf"], "y 1");
 });
+
+test("YAML paths: a nested key of the same name cannot override the real one (R7 injection)", async () => {
+  const { yamlPath, checkFactSpecs } = await import("../facts.mjs");
+  const yml = "server:\n  port: 8080\n  read_timeout: 30s  # real\n  write_timeout: 10s\noverrides:\n  server:\n    read_timeout: 500ms\nnotes: \"read_timeout: 1ms\"\n";
+  assert.equal(yamlPath(yml, "server.read_timeout"), "30s");
+  assert.equal(yamlPath(yml, "overrides.server.read_timeout"), "500ms");
+  assert.equal(yamlPath(yml, "server.missing"), null);
+  assert.equal(EXTRACTORS.duration(yml, { path: "server.read_timeout" }), 30000);
+  assert.equal(EXTRACTORS.duration(yml, { key: "read_timeout" }), 500, "the flat key is fooled — which is why YAML requires path");
+  assert.equal(checkFactSpecs([{ name: "t", extract: "duration", key: "read_timeout" }], "facts", "service.yaml").length, 1);
+  assert.equal(checkFactSpecs([{ name: "t", extract: "duration", path: "server.read_timeout" }], "facts", "service.yaml").length, 0);
+  assert.equal(checkFactSpecs([{ name: "t", extract: "duration", key: "read_timeout" }], "facts", "redis.conf").length, 0);
+  assert.equal(yamlPath('a:\n  "b": \'x\'\n', "a.b"), "x");
+});

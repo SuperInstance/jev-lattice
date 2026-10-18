@@ -72,6 +72,8 @@ Providers: `typesafe` (Jev tools), `minimax` (`jev_minimax_proof`, `jev_decompos
 - **Staging:** `npm run deploy:staging` deploys `jev-lattice-staging` with its own D1, R2, rate-limit namespace and metrics dataset. Set its secrets with `--env staging`.
 - **Metrics:** the Analytics Engine dataset `jev_lattice` (`jev_lattice_staging`) gets one point per API request: `blob1` route, `blob2` lattice, `blob3` tenant, `blob4` status, `blob5` tool; `double1` latency in ms, `double2` an is-5xx flag.
 - **Request ids:** every `/mcp`, `/api` and `/admin` response carries `x-request-id`; a 500 response includes it in the body, and the log line has it.
+- **Deep health:** `GET /admin/health` (root). **SLO report:** `scripts/metrics-report.mjs`, run hourly by the `slo` workflow.
+- **Registry backfill:** `POST /admin/lattices {"names": [...]}` for lattices created before 0.9.
 - **Key expiry:** `POST /admin/keys {…, "expires_in_days": 90}`. Expired keys get a 401 with `token expired`, and `GET /admin/keys` shows `last_used_at` (updated at most hourly).
 
 ## Audit log

@@ -18,7 +18,7 @@ const SPECS = {
   units: { "redis.conf": [{ name: "maxmemory_bytes", extract: "size", key: "maxmemory" }] },
   override: { "redis.conf": [{ name: "effective_appendonly", extract: "directive", key: "appendonly", default: "no (default)" }] },
   default: { "redis.conf": [{ name: "effective_protected_mode", extract: "directive", key: "protected-mode", default: "yes (default)" }] },
-  duration: { "service.yaml": [{ name: "read_timeout_ms", extract: "duration", key: "read_timeout" }] },
+  duration: { "service.yaml": [{ name: "read_timeout_ms", extract: "duration", path: "server.read_timeout" }] },
   nested: { "config.json": [{ name: "security.audit.enabled", extract: "json", path: "security.audit.enabled" }] },
   count: { "users.yaml": [{ name: "admin_count", extract: "count", pattern: "role:\\s*admin\\s*$" }] }
 };

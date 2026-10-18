@@ -8,7 +8,7 @@ import { factsForFiles, checkFactSpecs } from "./facts.mjs";
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.9.1" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.10.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -237,7 +237,7 @@ export function createMcp({
         if (args.files) return orch.invalidateChangedFiles(lattice, { files: args.files, reason: args.reason });
         return orch.invalidateStale(lattice, { state: args.state, channel: args.channel, reason: args.reason });
       }
-      case "jev_verify_files": { const fe = args.facts ? Object.entries(args.facts).flatMap(([f, sp]) => checkFactSpecs(sp, `facts["${f}"]`)) : []; if (fe.length) return { ok: false, error: fe.join("; ") }; } return orch.verifyFiles(lattice, { jev, files: args.files, ids: args.ids, rules: args.rules, quarantine: args.quarantine === true, stripComments: args.strip_comments !== false, facts: args.facts ? factsForFiles(args.files, args.facts) : null });
+      case "jev_verify_files": { const fe = args.facts ? Object.entries(args.facts).flatMap(([f, sp]) => checkFactSpecs(sp, `facts["${f}"]`, f)) : []; if (fe.length) return { ok: false, error: fe.join("; ") }; } return orch.verifyFiles(lattice, { jev, files: args.files, ids: args.ids, rules: args.rules, quarantine: args.quarantine === true, stripComments: args.strip_comments !== false, facts: args.facts ? factsForFiles(args.files, args.facts) : null });
       case "jev_list_nodes":
         return { ok: true, nodes: lattice.listNodes().map(n => lattice._nodeSummary(n)).map(s => ({ ...s, verdict: s.node_type === "QUESTION" ? lattice.evaluateGoNoGo(s.id).verdict : undefined })) };
       case "jev_get_node": return tools.getNode({ id: args.id });
