@@ -1,0 +1,75 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: "Also run live provider experiments (needs TYPESAFE_AI_TOKEN / MINIMAX_TOKEN secrets)"
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run example
+      - name: Worker bundles (wrangler 4 needs Node >= 22)
+        if: matrix.node >= 22
+        run: npm run build:assets && npx wrangler deploy --dry-run --outdir dist
+
+  browser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save playwright@1.56.1 && npx playwright install --with-deps chromium
+      - run: npm run test:browser
+
+  live:
+    if: github.event_name == 'workflow_dispatch' && inputs.live
+    runs-on: ubuntu-latest
+    env:
+      TYPESAFE_AI_TOKEN: ${{ secrets.TYPESAFE_AI_TOKEN }}
+      MINIMAX_TOKEN: ${{ secrets.MINIMAX_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node experiments/calibration.mjs --n 20 --no-minimax
+      - run: node experiments/live-compile.mjs
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [test, browser]
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Deploy (skipped when CLOUDFLARE_API_TOKEN is not configured)
+        if: env.CLOUDFLARE_API_TOKEN != ''
+        run: npm run deploy

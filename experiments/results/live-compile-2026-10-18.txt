@@ -1,0 +1,33 @@
+
+### Q1 TLS-only
+   {"step":"jev_noul","verdict":"GO","p":0.94,"latency_ms":323}
+   gate: GO - binary proof satisfied
+
+### Q2 persistence
+   {"step":"jev_noul","verdict":"REFUTED","p":0.05,"latency_ms":116}
+   gate: REFUTED - refuted by proof
+
+### Q3 production-ready (diagnostic)
+   {"step":"jev_noul","verdict":"REFUTED","p":0.1,"latency_ms":107}
+   {"step":"minimax_cot","verdict":"REFUTED","p":0.5,"rationale":"The evidence shows TLS, password protection, a healthcheck, and basic monitoring, but lacks key production features like data persistence (RDB/AOF) and replication/clustering, making it impossible to definitively assess production readiness."}
+   {"step":"decompose","verdict":"REFUTED","children":["Is authentication (requirepass or ACL) enabled on the Redis instance?","Are TLS and network‑level access controls (bind to internal IPs, firewall rules) configured for all client and replication connections?","Is a high‑availability mechanism (Redis Sentinel or Redis Cluster) with automatic failover configured and tested?","Are automated backups
+   {"step":"jev_fan_out","verdict":"REFUTED","results":[{"text":"Is authentication (requirepass or ACL) enabled on the Redis instance?","p":0.92,"verdict":"GO"},{"text":"Are TLS and network‑level access controls (bind to internal IPs, firewall rules) configured for all client and replication connections?","p":0.14,"verdict":"REFUTED"},{"text":"Is a high‑availability mechanism (Redis Sentinel or Redis
+   {"step":"rollup","verdict":"REFUTED","applied":true,"note":"refuted child: Are TLS and network‑level access controls (bind to internal IPs, firewall rules) configured for all client and replication connections? | Is a high‑availability mechanism (Redis Sentinel or Redis Cluster) with automatic failover configured and tested? | Are automated backups (RDB and/or AOF) scheduled, retained, and are res
+   gate: REFUTED - refuted by 2 path(s); 0/2 supporting
+
+### config drift: tls disabled, plaintext port opened
+   invalidated 10 proofs; re-verified 8 open gates in ONE Jev call (64 ms)
+   OPEN     p=0.46  Does Redis only accept TLS connections (plaintext port disabled)?
+   REFUTED  p=0.05  Is Redis persistence (RDB or AOF) explicitly enabled?
+   REFUTED  p=0.07  Is this Redis deployment production-ready?
+   GO       p=0.86  Is authentication (requirepass or ACL) enabled on the Redis instance?
+   REFUTED  p=0.06  Are TLS and network‑level access controls (bind to internal IPs, firewall rules) configured for all client and replication connections?
+   REFUTED  p=0.02  Is a high‑availability mechanism (Redis Sentinel or Redis Cluster) with automatic failover configured and tested?
+   REFUTED  p=0.05  Are automated backups (RDB and/or AOF) scheduled, retained, and are restore procedures documented and tested?
+   REFUTED  p=0.12  Is there comprehensive monitoring, alerting, and performance tuning (e.g., slowlog, maxmemory policy, memory usage alerts, exported metrics) in place?
+   Q3 after roll-up: REFUTED refuted child: Are TLS and network‑level access controls (bind to internal IPs, firewall rules) configured for all client and replication connections? | Is a high‑availability mechanism (Redis Sentinel or Redis Cluster) with automatic failover configured and tested? | Are automated backups (RDB and/or AOF) scheduled, retained, and are restore procedures documented and tested? | Is there comprehensive monitoring,
+
+### cost
+   jev: {"calls":5,"input_tokens":2680,"output_tokens":355,"questions":16}
+   minimax: {"calls":2,"prompt_tokens":373,"completion_tokens":2787}
+   wall: 40555 ms; lattice: {"ok":true,"nodes":8,"questions":8,"openGates":7,"edges":14,"avgSalience":0.616,"avgUncertainty":0.793,"version":47,"schema":"jev-lattice/v0.2"}

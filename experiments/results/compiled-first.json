@@ -1,0 +1,145 @@
+{
+  "at": "2026-10-18T01:10:07.652Z",
+  "EPS": 0.2,
+  "N": 30,
+  "compiled": [
+    {
+      "q": "Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?",
+      "accepted": false,
+      "attempts": 2,
+      "confident": 18
+    },
+    {
+      "q": "Is TLS enabled (a tls-port is configured)?",
+      "accepted": true,
+      "attempts": 1,
+      "confident": 20
+    },
+    {
+      "q": "Is AOF persistence enabled (appendonly yes in effect)?",
+      "accepted": true,
+      "attempts": 2,
+      "confident": 20
+    },
+    {
+      "q": "Is a memory limit (maxmemory) configured?",
+      "accepted": true,
+      "attempts": 2,
+      "confident": 13
+    },
+    {
+      "q": "Is the memory limit at least 1 GB?",
+      "accepted": false,
+      "attempts": 2,
+      "confident": 13
+    },
+    {
+      "q": "Does the eviction policy evict keys when memory is full (anything but noeviction)?",
+      "accepted": true,
+      "attempts": 1,
+      "confident": 14
+    },
+    {
+      "q": "Is password authentication (requirepass) configured?",
+      "accepted": true,
+      "attempts": 1,
+      "confident": 20
+    },
+    {
+      "q": "Is Redis bound only to the loopback interface?",
+      "accepted": true,
+      "attempts": 2,
+      "confident": 18
+    },
+    {
+      "q": "Is Redis listening on all interfaces (bind 0.0.0.0)?",
+      "accepted": false,
+      "attempts": 2,
+      "confident": 16
+    },
+    {
+      "q": "Is the effective plaintext port 6379?",
+      "accepted": true,
+      "attempts": 1,
+      "confident": 10
+    }
+  ],
+  "results": [
+    {
+      "strategy": "all-jev",
+      "inDist": {
+        "acc": 0.993,
+        "wrongGo": 0,
+        "jevQ": 300,
+        "compiledShare": 0
+      },
+      "shifted": {
+        "acc": 0.997,
+        "wrongGo": 0,
+        "jevQ": 300,
+        "compiledShare": 0
+      },
+      "quarantined": 0,
+      "heals": 0,
+      "healMiniMaxCalls": 0,
+      "configsToFirstQuarantine": null
+    },
+    {
+      "strategy": "compiled-only",
+      "inDist": {
+        "acc": 0.993,
+        "wrongGo": 0,
+        "jevQ": 90,
+        "compiledShare": 0.7
+      },
+      "shifted": {
+        "acc": 0.997,
+        "wrongGo": 0,
+        "jevQ": 90,
+        "compiledShare": 0.7
+      },
+      "quarantined": 0,
+      "heals": 0,
+      "healMiniMaxCalls": 0,
+      "configsToFirstQuarantine": null
+    },
+    {
+      "strategy": "compiled+spot",
+      "inDist": {
+        "acc": 0.993,
+        "wrongGo": 0,
+        "jevQ": 125,
+        "compiledShare": 0.7
+      },
+      "shifted": {
+        "acc": 0.993,
+        "wrongGo": 0,
+        "jevQ": 111,
+        "compiledShare": 0.7
+      },
+      "quarantined": 0,
+      "heals": 0,
+      "healMiniMaxCalls": 0,
+      "configsToFirstQuarantine": null
+    },
+    {
+      "strategy": "compiled+spot+heal",
+      "inDist": {
+        "acc": 0.993,
+        "wrongGo": 0,
+        "jevQ": 125,
+        "compiledShare": 0.7
+      },
+      "shifted": {
+        "acc": 0.993,
+        "wrongGo": 0,
+        "jevQ": 111,
+        "compiledShare": 0.7
+      },
+      "quarantined": 0,
+      "heals": 0,
+      "healMiniMaxCalls": 0,
+      "configsToFirstQuarantine": null
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+{
+  "at": "2026-10-18T00:37:46.138Z",
+  "n": 300,
+  "report": {
+    "jev": {
+      "n": 300,
+      "acc": 0.99,
+      "brier": 0.009,
+      "ece": 0.047,
+      "gate": {
+        "0.8": {
+          "go": 122,
+          "wrongGo": 0
+        },
+        "0.9": {
+          "go": 119,
+          "wrongGo": 0
+        },
+        "0.95": {
+          "go": 102,
+          "wrongGo": 0
+        }
+      }
+    },
+    "jev_per_question": [
+      {
+        "q": "Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?",
+        "acc": 0.9
+      },
+      {
+        "q": "Is TLS enabled (a tls-port is configured)?",
+        "acc": 1
+      },
+      {
+        "q": "Is AOF persistence enabled (appendonly yes in effect)?",
+        "acc": 1
+      },
+      {
+        "q": "Is a memory limit (maxmemory) configured?",
+        "acc": 1
+      },
+      {
+        "q": "Is the memory limit at least 1 GB?",
+        "acc": 1
+      },
+      {
+        "q": "Does the eviction policy evict keys when memory is full (anything but noeviction)?",
+        "acc": 1
+      },
+      {
+        "q": "Is password authentication (requirepass) configured?",
+        "acc": 1
+      },
+      {
+        "q": "Is Redis bound only to the loopback interface?",
+        "acc": 1
+      },
+      {
+        "q": "Is Redis listening on all interfaces (bind 0.0.0.0)?",
+        "acc": 1
+      },
+      {
+        "q": "Is the effective plaintext port 6379?",
+        "acc": 1
+      }
+    ]
+  }
+}

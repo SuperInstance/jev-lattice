@@ -1,0 +1,60 @@
+{
+  "name": "jev-lattice",
+  "version": "0.4.0",
+  "description": "Question graph with multi-proof verification and deterministic go/no-go — TypeSafe Jev + MiniMax proof providers, MCP server, Cloudflare Durable Object deployment",
+  "type": "module",
+  "main": "jev-core.js",
+  "exports": {
+    ".": "./jev-core.js",
+    "./orchestrator": "./orchestrator.mjs",
+    "./proof-cache": "./proof-cache.mjs",
+    "./compiled": "./compiled.mjs",
+    "./calibration": "./calibration.mjs",
+    "./mcp": "./mcp-core.mjs",
+    "./providers/jev": "./providers/jev.mjs",
+    "./providers/minimax": "./providers/minimax.mjs",
+    "./providers/workers-ai": "./providers/workers-ai.mjs"
+  },
+  "bin": {
+    "jev-mcp": "./mcp-server.mjs"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/e2e/browser.e2e.mjs",
+    "mcp": "node mcp-server.mjs",
+    "example": "node examples/compile-loop.mjs",
+    "live:compile": "node experiments/live-compile.mjs",
+    "live:calibration": "node experiments/calibration.mjs",
+    "live:compile-parser": "node experiments/compile-parser.mjs",
+    "live:proof-cache": "node experiments/proof-cache.mjs",
+    "live:compiled-first": "node experiments/compiled-first.mjs",
+    "live:decompose": "node experiments/decompose-vs-direct.mjs",
+    "live:choice-score": "node experiments/choice-score-gates.mjs",
+    "live:agent": "node experiments/minimax-agent.mjs",
+    "mm": "node providers/minimax.mjs",
+    "build:assets": "node scripts/build-assets.mjs",
+    "dev": "npm run build:assets && wrangler dev",
+    "deploy": "npm run build:assets && wrangler deploy",
+    "smoke": "node scripts/smoke-worker.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.1"
+  },
+  "keywords": [
+    "jev",
+    "typesafe",
+    "mcp",
+    "question-graph",
+    "go-no-go",
+    "multi-proof",
+    "cloudflare-workers",
+    "durable-objects",
+    "minimax",
+    "agent-memory",
+    "superinstance"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  }
+}

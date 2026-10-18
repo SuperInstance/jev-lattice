@@ -1,0 +1,207 @@
+{
+  "at": "2026-10-18T00:37:33.889Z",
+  "n": 120,
+  "report": {
+    "jev": {
+      "n": 120,
+      "acc": 0.975,
+      "brier": 0.018,
+      "ece": 0.068,
+      "gate": {
+        "0.8": {
+          "go": 52,
+          "wrongGo": 0
+        },
+        "0.9": {
+          "go": 48,
+          "wrongGo": 0
+        },
+        "0.95": {
+          "go": 45,
+          "wrongGo": 0
+        }
+      }
+    },
+    "minimax": {
+      "n": 120,
+      "acc": 1,
+      "brier": 0,
+      "ece": 0.003,
+      "gate": {
+        "0.8": {
+          "go": 54,
+          "wrongGo": 0
+        },
+        "0.9": {
+          "go": 54,
+          "wrongGo": 0
+        },
+        "0.95": {
+          "go": 54,
+          "wrongGo": 0
+        }
+      }
+    },
+    "workers-ai": {
+      "n": 120,
+      "acc": 0.917,
+      "brier": 0.076,
+      "ece": 0.072,
+      "gate": {
+        "0.8": {
+          "go": 54,
+          "wrongGo": 5
+        },
+        "0.9": {
+          "go": 54,
+          "wrongGo": 5
+        },
+        "0.95": {
+          "go": 47,
+          "wrongGo": 0
+        }
+      }
+    },
+    "jev+minimax": {
+      "go": 48,
+      "wrong": 0,
+      "recall": 0.889
+    },
+    "jev+workers-ai": {
+      "go": 43,
+      "wrong": 0,
+      "recall": 0.796
+    },
+    "minimax+workers-ai": {
+      "go": 49,
+      "wrong": 0,
+      "recall": 0.907
+    },
+    "jev_per_question": [
+      {
+        "q": "Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?",
+        "acc": 0.8333333333333334
+      },
+      {
+        "q": "Is TLS enabled (a tls-port is configured)?",
+        "acc": 1
+      },
+      {
+        "q": "Is AOF persistence enabled (appendonly yes in effect)?",
+        "acc": 1
+      },
+      {
+        "q": "Is a memory limit (maxmemory) configured?",
+        "acc": 1
+      },
+      {
+        "q": "Is the memory limit at least 1 GB?",
+        "acc": 1
+      },
+      {
+        "q": "Does the eviction policy evict keys when memory is full (anything but noeviction)?",
+        "acc": 1
+      },
+      {
+        "q": "Is password authentication (requirepass) configured?",
+        "acc": 1
+      },
+      {
+        "q": "Is Redis bound only to the loopback interface?",
+        "acc": 1
+      },
+      {
+        "q": "Is Redis listening on all interfaces (bind 0.0.0.0)?",
+        "acc": 1
+      },
+      {
+        "q": "Is the effective plaintext port 6379?",
+        "acc": 0.9166666666666666
+      }
+    ],
+    "minimax_per_question": [
+      {
+        "q": "Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?",
+        "acc": 1
+      },
+      {
+        "q": "Is TLS enabled (a tls-port is configured)?",
+        "acc": 1
+      },
+      {
+        "q": "Is AOF persistence enabled (appendonly yes in effect)?",
+        "acc": 1
+      },
+      {
+        "q": "Is a memory limit (maxmemory) configured?",
+        "acc": 1
+      },
+      {
+        "q": "Is the memory limit at least 1 GB?",
+        "acc": 1
+      },
+      {
+        "q": "Does the eviction policy evict keys when memory is full (anything but noeviction)?",
+        "acc": 1
+      },
+      {
+        "q": "Is password authentication (requirepass) configured?",
+        "acc": 1
+      },
+      {
+        "q": "Is Redis bound only to the loopback interface?",
+        "acc": 1
+      },
+      {
+        "q": "Is Redis listening on all interfaces (bind 0.0.0.0)?",
+        "acc": 1
+      },
+      {
+        "q": "Is the effective plaintext port 6379?",
+        "acc": 1
+      }
+    ],
+    "workers-ai_per_question": [
+      {
+        "q": "Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?",
+        "acc": 1
+      },
+      {
+        "q": "Is TLS enabled (a tls-port is configured)?",
+        "acc": 1
+      },
+      {
+        "q": "Is AOF persistence enabled (appendonly yes in effect)?",
+        "acc": 1
+      },
+      {
+        "q": "Is a memory limit (maxmemory) configured?",
+        "acc": 0.5833333333333334
+      },
+      {
+        "q": "Is the memory limit at least 1 GB?",
+        "acc": 0.9166666666666666
+      },
+      {
+        "q": "Does the eviction policy evict keys when memory is full (anything but noeviction)?",
+        "acc": 0.75
+      },
+      {
+        "q": "Is password authentication (requirepass) configured?",
+        "acc": 1
+      },
+      {
+        "q": "Is Redis bound only to the loopback interface?",
+        "acc": 0.9166666666666666
+      },
+      {
+        "q": "Is Redis listening on all interfaces (bind 0.0.0.0)?",
+        "acc": 1
+      },
+      {
+        "q": "Is the effective plaintext port 6379?",
+        "acc": 1
+      }
+    ]
+  }
+}

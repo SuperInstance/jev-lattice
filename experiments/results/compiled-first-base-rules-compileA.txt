@@ -1,0 +1,14 @@
+90:      const h = await healQuarantined({ registry: reg, mm, rules: READING_RULES, sandbox, examples: [...examples, cfg.text], minLabels: 6 });
+compiled 9/10 predicates in 158910 ms (rules: base)
+
+stream: 30 in-dist then 30 shifted configs × 10 questions; spot-check ε=0.2
+
+strategy             | in-dist acc  wrongGO  jevQ  compiled | shifted acc  wrongGO  jevQ  compiled | quarantined heals  firstQ@
+all-jev              |    0.993        0   300      0.00    |    0.997        0   300      0.00    |           0     0        -
+compiled-only        |    0.967        8    30      0.90    |    0.787       24    30      0.90    |           0     0        -
+compiled+spot        |    0.967        8    75      0.90    |    0.880        8   112      0.69    |           3     0        1
+compiled+spot+heal   |    0.967        8    75      0.90    |    0.877        8   109      0.71    |           0     3        1
+
+usage: jev {"calls":260,"input_tokens":125017,"output_tokens":21967,"questions":1231} minimax {"calls":21,"prompt_tokens":6829,"completion_tokens":102748}
+
+[exited with code 0]

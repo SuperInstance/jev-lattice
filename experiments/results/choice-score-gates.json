@@ -1,0 +1,328 @@
+{
+  "at": "2026-10-18T01:26:33.674Z",
+  "N": 40,
+  "all": {
+    "noul": {
+      "n": 240,
+      "brier": 0.0023,
+      "ece": 0.033,
+      "gate": {
+        "0.8": {
+          "go": 101,
+          "wrongGo": 0,
+          "recall": 1
+        },
+        "0.9": {
+          "go": 98,
+          "wrongGo": 0,
+          "recall": 0.97
+        },
+        "0.95": {
+          "go": 85,
+          "wrongGo": 0,
+          "recall": 0.842
+        }
+      }
+    },
+    "derived": {
+      "n": 240,
+      "brier": 0,
+      "ece": 0.0004,
+      "gate": {
+        "0.8": {
+          "go": 101,
+          "wrongGo": 0,
+          "recall": 1
+        },
+        "0.9": {
+          "go": 101,
+          "wrongGo": 0,
+          "recall": 1
+        },
+        "0.95": {
+          "go": 101,
+          "wrongGo": 0,
+          "recall": 1
+        }
+      }
+    }
+  },
+  "perProp": {
+    "loopback": {
+      "noul": {
+        "n": 40,
+        "brier": 0.0022,
+        "ece": 0.0323,
+        "gate": {
+          "0.8": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 12,
+            "wrongGo": 0,
+            "recall": 0.8
+          },
+          "0.95": {
+            "go": 6,
+            "wrongGo": 0,
+            "recall": 0.4
+          }
+        }
+      },
+      "derived": {
+        "n": 40,
+        "brier": 0,
+        "ece": 0,
+        "gate": {
+          "0.8": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      }
+    },
+    "allIfaces": {
+      "noul": {
+        "n": 40,
+        "brier": 0.0008,
+        "ece": 0.0205,
+        "gate": {
+          "0.8": {
+            "go": 12,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 12,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 0.75
+          }
+        }
+      },
+      "derived": {
+        "n": 40,
+        "brier": 0,
+        "ece": 0,
+        "gate": {
+          "0.8": {
+            "go": 12,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 12,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 12,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      }
+    },
+    "evicts": {
+      "noul": {
+        "n": 40,
+        "brier": 0.0026,
+        "ece": 0.0453,
+        "gate": {
+          "0.8": {
+            "go": 34,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 34,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 30,
+            "wrongGo": 0,
+            "recall": 0.882
+          }
+        }
+      },
+      "derived": {
+        "n": 40,
+        "brier": 0,
+        "ece": 0,
+        "gate": {
+          "0.8": {
+            "go": 34,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 34,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 34,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      }
+    },
+    "lfu": {
+      "noul": {
+        "n": 40,
+        "brier": 0.0003,
+        "ece": 0.0165,
+        "gate": {
+          "0.8": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      },
+      "derived": {
+        "n": 40,
+        "brier": 0,
+        "ece": 0,
+        "gate": {
+          "0.8": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      }
+    },
+    "mem1g": {
+      "noul": {
+        "n": 40,
+        "brier": 0.0042,
+        "ece": 0.044,
+        "gate": {
+          "0.8": {
+            "go": 16,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 16,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 16,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      },
+      "derived": {
+        "n": 40,
+        "brier": 0,
+        "ece": 0.002,
+        "gate": {
+          "0.8": {
+            "go": 16,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 16,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 16,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      }
+    },
+    "mem4g": {
+      "noul": {
+        "n": 40,
+        "brier": 0.0035,
+        "ece": 0.0395,
+        "gate": {
+          "0.8": {
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      },
+      "derived": {
+        "n": 40,
+        "brier": 0,
+        "ece": 0.0002,
+        "gate": {
+          "0.8": {
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.9": {
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "0.95": {
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      }
+    }
+  }
+}

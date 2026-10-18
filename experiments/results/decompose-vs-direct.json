@@ -1,0 +1,153 @@
+{
+  "at": "2026-10-18T01:23:38.944Z",
+  "N": 60,
+  "T": 0.9,
+  "rows": [
+    {
+      "k": "all-3",
+      "truthYes": 17,
+      "direct": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "decomposed": {
+        "decided": 0.717,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "subQuestions": [
+        "Is there a 'tls-port' directive in the Redis configuration file with a non-zero port number?",
+        "Is there a 'requirepass' directive in the Redis configuration file with a non-empty password?",
+        "Is there a 'maxmemory' directive in the Redis configuration file with a positive integer value?"
+      ]
+    },
+    {
+      "k": "all-4",
+      "truthYes": 8,
+      "direct": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "decomposed": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "subQuestions": [
+        "Is a TLS port (tls-port) configured in the Redis configuration file?",
+        "Is a password (requirepass) configured in the Redis configuration file?",
+        "Is a memory limit (maxmemory) configured in the Redis configuration file?",
+        "Is AOF persistence enabled (appendonly set to yes) in the Redis configuration file?"
+      ]
+    },
+    {
+      "k": "all-5",
+      "truthYes": 5,
+      "direct": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "decomposed": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "subQuestions": [
+        "Is a TLS port (tls-port) configured in the Redis configuration?",
+        "Is a password (requirepass) configured in the Redis configuration?",
+        "Is a memory limit (maxmemory) configured in the Redis configuration?",
+        "Is AOF persistence enabled (appendonly set to yes) in the Redis configuration?",
+        "Is the bind directive set to a value other than 0.0.0.0 in the Redis configuration?"
+      ]
+    },
+    {
+      "k": "all-6",
+      "truthYes": 3,
+      "direct": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "decomposed": {
+        "decided": 0.967,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "subQuestions": [
+        "Is TLS enabled with a tls-port configured in the Redis config?",
+        "Is password authentication enabled with a requirepass directive set in the Redis config?",
+        "Is a memory limit set via the maxmemory directive in the Redis config?",
+        "Is AOF persistence enabled by having appendonly set to yes in the Redis config?",
+        "Is Redis bound to a specific network interface (bind not set to 0.0.0.0) in the Redis config?",
+        "Is the eviction policy set to a value other than noeviction in the Redis config?"
+      ]
+    },
+    {
+      "k": "2-of-4",
+      "truthYes": 49,
+      "direct": {
+        "decided": 0.85,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "decomposed": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "subQuestions": [
+        "Is it true that TLS is enabled (a tls-port is configured)?",
+        "Is it true that password authentication (requirepass) is configured?",
+        "Is it true that a memory limit (maxmemory) is configured?",
+        "Is it true that AOF persistence is enabled (appendonly yes in effect)?"
+      ]
+    },
+    {
+      "k": "3-of-6",
+      "truthYes": 54,
+      "direct": {
+        "decided": 0.85,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "decomposed": {
+        "decided": 0.983,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "subQuestions": [
+        "Is it true that TLS is enabled (a tls-port is configured)?",
+        "Is it true that password authentication (requirepass) is configured?",
+        "Is it true that a memory limit (maxmemory) is configured?",
+        "Is it true that AOF persistence is enabled (appendonly yes in effect)?",
+        "Is it true that Redis is NOT listening on all interfaces (bind is not 0.0.0.0)?",
+        "Is it true that the eviction policy is not noeviction?"
+      ]
+    },
+    {
+      "k": "4-of-6",
+      "truthYes": 34,
+      "direct": {
+        "decided": 0.5,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "decomposed": {
+        "decided": 1,
+        "acc": 1,
+        "wrongGo": 0
+      },
+      "subQuestions": [
+        "Is it true that TLS is enabled (a tls-port is configured)?",
+        "Is it true that password authentication (requirepass) is configured?",
+        "Is it true that a memory limit (maxmemory) is configured?",
+        "Is it true that AOF persistence is enabled (appendonly yes in effect)?",
+        "Is it true that Redis is NOT listening on all interfaces (bind is not 0.0.0.0)?",
+        "Is it true that the eviction policy is not noeviction?"
+      ]
+    }
+  ]
+}
