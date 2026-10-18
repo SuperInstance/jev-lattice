@@ -1,0 +1,159 @@
+1. **CI/CD Deploy‑Eligibility Gate** – Guarantees that only builds that satisfy every policy are released, eliminating manual triage.
+
+**State & questions** – JSON output of a CI run (tests, lint, coverage).  
+- “Are all test suites marked PASS?”  
+- “Is line‑coverage ≥ 80 %?”  
+- “Did lint finish with zero errors?”  
+- “Is the build artifact size under the declared limit?”  
+- “Does the SBOM list no ‘critical’ vulnerabilities?”  
+
+**Ground truth** – A deterministic script parses the CI JSON, extracts each status field, and emits true/false for each question. No human labels needed.
+
+**Hypothesis & metric** – Using the Jev gate reduces the false‑positive rate (releases blocked for non‑issues) by > 30 % compared with the raw CI status check. Metric: false‑positive % on a set of 500 historical runs.
+
+**Lattice features** – TypeSafe Jev (fast, calibrated yes/no); binary deterministic gate (all must GO); caching by run‑ID hash; drift re‑check on any change to the CI JSON.
+
+---
+
+2. **Terraform Plan Drift Gate** – Stops infrastructure changes that would violate safety policies before apply.
+
+**State & questions** – Terraform plan JSON (resource changes).  
+- “Will any resource be destroyed?”  
+- “Will any security‑group rule allow unrestricted inbound SSH?”  
+- “Will any resource exceed the declared cost ceiling?”  
+- “Will any tag be missing on a production resource?”  
+- “Will any IAM policy grant */* permission?”  
+
+**Ground truth** – A Go/Python parser reads the plan, extracts resource actions, and compares against a policy table. Produces a boolean per question.
+
+**Hypothesis & metric** – Automated Jev gating catches ≥ 95 % of risky changes that currently slip through manual review. Metric: recall of policy violations in a 30‑day production sample.
+
+**Lattice features** – Jev yes/no checks (≈ 10 ms each); coordinated gate (k = 2 independent safety proofs required); state hash caching; drift detection via plan hash.
+
+---
+
+3. **Dependency‑Vulnerability Guard** – Prevents shipping code with known high‑severity CVEs.
+
+**State & questions** – `package-lock.json` (or equivalent).  
+- “Does any direct dependency have a CVE with CVSS ≥ 7.0?”  
+- “Does any transitive dependency ship a vulnerable version of `lodash`?”  
+- “Are all dev‑only packages marked as `devDependencies` (no production exposure)?”  
+- “Does the lockfile contain a package from a disallowed registry?”  
+- “Is the lockfile newer than the last audit timestamp?”  
+
+**Ground truth** – A script runs `npm audit --json` (or equivalent) and maps each vulnerability to the lockfile entries, returning true/false per question.
+
+**Hypothesis & metric** – The guard cuts the number of CVE‑related incidents in production by ≥ 40 %. Metric: incidents per quarter before/after deployment.
+
+**Lattice features** – TypeSafe Jev (fast, batched checks); binary gate (any CVE triggers REFUTED); caching by lockfile hash; periodic drift re‑verification (alert on new audit data).
+
+---
+
+4. **CHANGELOG Completeness Checker** – Ensures every merged PR since the last release is reflected in the release notes.
+
+**State & questions** – Git log (commits, PR numbers) + `CHANGELOG.md` content.  
+- “Is PR #123 listed in the changelog under the current release?”  
+- “Is each PR author credited?”  
+- “Does the changelog entry include a link to the PR?”  
+- “Are there any duplicate entries for the same PR?”  
+- “Is the ‘Breaking Changes’ section empty when no breaking PRs were merged?”  
+
+**Ground truth** – A script fetches the merged PR list via GitHub API, extracts their numbers, and performs a regex search in the changelog. Returns true/false per PR.
+
+**Hypothesis & metric** – Automated checking raises changelog recall from ~ 70 % to ≥ 95 % with zero manual effort. Metric: recall % measured on a sample of 200 PRs.
+
+**Lattice features** – Jev calibrated yes/no (fast scanning of long docs); coordinated gate (≥ 90 % of PRs must be present); caching by commit‑range hash; drift detection on new commits.
+
+---
+
+5. **Docker‑Compose Safety Gate** – Blocks deployment of compose files that violate security best practices.
+
+**State & questions** – `docker-compose.yml` (parsed YAML).  
+- “Is any service running with `privileged: true`?”  
+- “Are any services exposing a port directly to the host without a reason?”  
+- “Do any images use the `latest` tag?”  
+- “Is there a `user` directive set for each service?”  
+- “Do any services share the host’s network namespace (`network_mode: host`)?”  
+
+**Ground truth** – A YAML parser extracts service definitions and checks each policy rule, returning a boolean per question.
+
+**Hypothesis & metric** – The gate reduces misconfigured compose deployments in staging by ≥ 50 %. Metric: number of policy violations discovered per sprint.
+
+**Lattice features** – Jev yes/no checks (≈ 5 ms per file); binary gate (any violation triggers REFUTED); caching by file hash; drift re‑check on any commit touching the compose file.
+
+---
+
+6. **HTML Accessibility Baseline** – Guarantees that every `<img>` in a generated page has an `alt` attribute.
+
+**State & questions** – Rendered HTML (or static markup).  
+- “Does every `<img>` element have a non‑empty `alt` attribute?”  
+- “Does each `<a>` without text have an `aria-label`?”  
+- “Do all form inputs have associated `<label>` elements?”  
+- “Is the page’s primary language declared (`lang` attribute)?”  
+- “Does the page avoid `tabindex` values greater than 0?”  
+
+**Ground truth** – An HTML5 parser traverses the DOM, checks the presence/quality of each attribute, and returns true/false per question.
+
+**Hypothesis & metric** – Automated gating cuts accessibility‑related bug reports by ≥ 30 % after rollout. Metric: bug count per release.
+
+**Lattice features** – TypeSafe Jev (fast batch checks); binary gate (all must GO); caching by content hash; drift re‑check on each new HTML artifact.
+
+---
+
+7. **API Contract Compatibility Guard** – Ensures a new API version does not break existing client expectations.
+
+**State & questions** – OpenAPI spec (JSON/YAML) of the proposed version + a client‑usage report (e.g., request logs).  
+- “Does the new spec retain all endpoints that appear in the client report?”  
+- “Are all required request parameters still present for each used endpoint?”  
+- “Do response schemas preserve all fields that clients currently read?”  
+- “Is the authentication method unchanged for each used endpoint?”  
+- “Does the spec list any new deprecated fields that clash with client usage?”  
+
+**Ground truth** – A spec diff tool compares the new spec against the client usage matrix (generated from traffic logs) and emits booleans.
+
+**Hypothesis & metric** – The guard detects ≥ 90 % of breaking changes before release, cutting client‑impacting incidents. Metric: breaking‑change incident rate per quarter.
+
+**Lattice features** – Jev calibrated yes/no (≈ 20 ms per spec); coordinated gate (≥ 4 of 5 independent proofs required); caching by spec hash; drift detection on spec updates.
+
+---
+
+8. **Support‑Ticket Triage Classifier** – Routes incoming tickets to the correct team without manual tagging.
+
+**State & questions** – Raw ticket text (subject + body).  
+- “Contains the word ‘invoice’, ‘charge’, or ‘billing’?”  
+- “Mentions a specific error code from the API?”  
+- “Contains the phrase ‘account locked’?”  
+- “References a known outage in the status page?”  
+- “Contains the word ‘upgrade’ or ‘plan’?”  
+
+**Ground truth** – A deterministic keyword/regex matcher (or a simple parser of the ticketing system’s own fields) provides the true category.
+
+**Hypothesis & metric** – Jev triage raises routing accuracy from ~ 75 % (human) to ≥ 90 % with lower latency. Metric: % of tickets correctly routed within 1 minute.
+
+**Lattice features** – TypeSafe Jev (fast, many questions per ticket); binary gate (any “yes” on the matching team’s questions triggers GO); caching by ticket‑ID hash; drift re‑check when ticket content is edited.
+
+---
+
+**Ranking (value × ease of ground‑truth)**  
+
+| # | Use case | Value (1‑5) | Ease (1‑5) | Score |
+|---|----------|------------|------------|-------|
+| 1 | CI/CD Deploy‑Eligibility Gate | 5 | 5 | **25** |
+| 2 | Terraform Plan Drift Gate | 5 | 4 | **20** |
+| 3 | Dependency‑Vulnerability Guard | 5 | 4 | **20** |
+| 4 | CHANGELOG Completeness Checker | 4 | 3 | **12** |
+| 5 | Docker‑Compose Safety Gate | 4 | 4 | **16** |
+| 6 | HTML Accessibility Baseline | 3 | 5 | **15** |
+| 7 | API Contract Compatibility Guard | 4 | 3 | **12** |
+| 8 | Support‑Ticket Triage Classifier | 3 | 5 | **15** |
+
+*Sorted by descending score; ties broken by higher value.*
+
+**Top‑3 explanations**
+
+1. **CI/CD Deploy‑Eligibility Gate** – By encoding every quality‑policy as a fast, cached Jev yes/no node and gating with a deterministic “all‑must‑GO” rule, we can halt releases that would otherwise ship broken or unsafe artifacts, directly reducing incident frequency. The ground truth is a deterministic parser of CI JSON, making evaluation cheap and repeatable across thousands of runs.
+
+2. **Terraform Plan Drift Gate** – Turning infrastructure safety checks into independent Jev proofs and requiring at least two to pass (coordinated gate) catches risky changes such as resource destruction or over‑permissive security groups before they reach production, while the plan hash enables instant caching and drift detection.
+
+3. **Dependency‑Vulnerability Guard** – Using Jev to scan lockfiles for known high‑severity CVEs provides a calibrated, low‑latency filter that can be run on every commit, preventing vulnerable code from reaching production; the ground truth comes from the package‑manager’s audit output, which is machine‑readable and stable.
+[minimax] MiniMax-M2.7 usage={"total_tokens":4450,"total_characters":0,"prompt_tokens":479,"completion_tokens":3971}

@@ -1,0 +1,156 @@
+{
+  "model": "jev-1.13.0",
+  "at": "2026-10-18T15:35:06.844Z",
+  "order": {
+    "n": 30,
+    "argmax_flips": {
+      "bind": {
+        "reversed": 0,
+        "shuffled": 0
+      },
+      "policy": {
+        "reversed": 0,
+        "shuffled": 0
+      },
+      "aof": {
+        "reversed": 0,
+        "shuffled": 0
+      }
+    },
+    "max_abs_dp": {
+      "bind": 0,
+      "policy": 0,
+      "aof": 0
+    }
+  },
+  "blind": [
+    {
+      "f": "redis.conf",
+      "q": "Is the plaintext (non-TLS) port disabled, i.e. is the effective `port` 0?",
+      "p": 0.53,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is TLS enabled (a tls-port is configured)?",
+      "p": 0.05,
+      "verdict_with_no_evidence": "REFUTED"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is AOF persistence enabled (appendonly yes in effect)?",
+      "p": 0.09,
+      "verdict_with_no_evidence": "REFUTED"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is a memory limit (maxmemory) configured?",
+      "p": 0.07,
+      "verdict_with_no_evidence": "REFUTED"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is the memory limit at least 1 GB?",
+      "p": 0.21,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Does the eviction policy evict keys when memory is full (anything but noeviction)?",
+      "p": 0.47,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is password authentication (requirepass) configured?",
+      "p": 0.06,
+      "verdict_with_no_evidence": "REFUTED"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is Redis bound only to the loopback interface?",
+      "p": 0.34,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is Redis listening on all interfaces (bind 0.0.0.0)?",
+      "p": 0.43,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is the effective plaintext port 6379?",
+      "p": 0.53,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is TLS enabled (a tls-port is configured)?",
+      "p": 0.05,
+      "verdict_with_no_evidence": "REFUTED"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is AOF persistence enabled (appendonly yes in effect)?",
+      "p": 0.09,
+      "verdict_with_no_evidence": "REFUTED"
+    },
+    {
+      "f": "redis.conf",
+      "q": "Is password authentication (requirepass) configured?",
+      "p": 0.06,
+      "verdict_with_no_evidence": "REFUTED"
+    },
+    {
+      "f": "nginx.conf",
+      "q": "Does nginx serve HTTPS (listen 443 ssl)?",
+      "p": 0.13,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "nginx.conf",
+      "q": "Is gzip compression enabled in nginx?",
+      "p": 0.18,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "nginx.conf",
+      "q": "Does nginx send a Strict-Transport-Security header?",
+      "p": 0.13,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "app.env",
+      "q": "Is DEBUG disabled in app.env?",
+      "p": 0.61,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "app.env",
+      "q": "Is LOG_LEVEL set to info or warn (not debug)?",
+      "p": 0.29,
+      "verdict_with_no_evidence": "OPEN"
+    },
+    {
+      "f": "app.env",
+      "q": "Is error reporting configured (SENTRY_DSN set)?",
+      "p": 0.06,
+      "verdict_with_no_evidence": "REFUTED"
+    }
+  ],
+  "rot": {
+    "redis only": {
+      "correct": 275,
+      "wrong": 0,
+      "open": 25,
+      "brier": 0.0052
+    },
+    "+3 unrelated files": {
+      "correct": 252,
+      "wrong": 0,
+      "open": 48,
+      "brier": 0.012
+    }
+  }
+}

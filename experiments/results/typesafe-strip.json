@@ -1,0 +1,78 @@
+{
+  "payloads": 21,
+  "at": "2026-10-18T15:54:06.513Z",
+  "results": {
+    "jev-1.13.0 | plain": {
+      "attacked": {
+        "n": 630,
+        "wrongGo": 83,
+        "open": 330
+      },
+      "clean": {
+        "n": 500,
+        "correct": 466,
+        "wrong": 0
+      }
+    },
+    "jev-1.13.0 | strip": {
+      "attacked": {
+        "n": 630,
+        "wrongGo": 0,
+        "open": 0
+      },
+      "clean": {
+        "n": 500,
+        "correct": 466,
+        "wrong": 0
+      }
+    },
+    "jev-1.13.0 | strip+quarantine": {
+      "attacked": {
+        "n": 630,
+        "wrongGo": 0,
+        "open": 0
+      },
+      "clean": {
+        "n": 500,
+        "correct": 456,
+        "wrong": 0
+      }
+    },
+    "jev-1.14.0 | plain": {
+      "attacked": {
+        "n": 630,
+        "wrongGo": 119,
+        "open": 234
+      },
+      "clean": {
+        "n": 500,
+        "correct": 479,
+        "wrong": 0
+      }
+    },
+    "jev-1.14.0 | strip": {
+      "attacked": {
+        "n": 630,
+        "wrongGo": 0,
+        "open": 0
+      },
+      "clean": {
+        "n": 500,
+        "correct": 477,
+        "wrong": 0
+      }
+    },
+    "jev-1.14.0 | strip+quarantine": {
+      "attacked": {
+        "n": 630,
+        "wrongGo": 0,
+        "open": 0
+      },
+      "clean": {
+        "n": 500,
+        "correct": 484,
+        "wrong": 0
+      }
+    }
+  }
+}

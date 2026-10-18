@@ -21,11 +21,16 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 export function createJev({
   apiKey = globalThis.process?.env?.TYPESAFE_AI_TOKEN,
-  model = JEV_DEFAULT_MODEL,
+  model = globalThis.process?.env?.JEV_MODEL || JEV_DEFAULT_MODEL, // pin in production, e.g. jev-1.13.0
   baseUrl = DEFAULT_BASE,
   fetchImpl = globalThis.fetch,
   maxRetries = 4,
-  timeoutMs = 60000
+  timeoutMs = 60000,
+  // 262k per-request/per-question context instead of 64k/32k (TypeSafe long-context header)
+  longContext = false,
+  // gzip request bodies at or above this size (the API accepts Content-Encoding: gzip; ~20× smaller
+  // for config text). 0 disables. Skipped where CompressionStream is unavailable.
+  gzipMinBytes = 16384
 } = {}) {
   if (!apiKey) throw new Error("Jev: missing api key (TYPESAFE_AI_TOKEN)");
   const usage = { calls: 0, input_tokens: 0, output_tokens: 0, questions: 0 };
@@ -35,7 +40,16 @@ export function createJev({
    * Retries 429/529/5xx with exponential backoff as the API docs recommend.
    */
   async function ask(state, questions, { model: m = model } = {}) {
-    const body = JSON.stringify({ state, model: m, questions });
+    const json = JSON.stringify({ state, model: m, questions });
+    let body = json, encoding = null;
+    if (gzipMinBytes && json.length >= gzipMinBytes && typeof CompressionStream === "function") {
+      try {
+        body = new Uint8Array(await new Response(new Blob([json]).stream().pipeThrough(new CompressionStream("gzip"))).arrayBuffer());
+        encoding = "gzip";
+      } catch {
+        body = json;
+      }
+    }
     let lastErr;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       const ctrl = new AbortController();
@@ -44,7 +58,12 @@ export function createJev({
       try {
         res = await fetchImpl(`${baseUrl}/systemone`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+            ...(encoding ? { "Content-Encoding": encoding } : {}),
+            ...(longContext ? { "TypeSafe-Danger-Zone-Long-Context": "true" } : {})
+          },
           body,
           signal: ctrl.signal
         });
@@ -63,8 +82,13 @@ export function createJev({
       }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const err = new Error(`Jev error ${res.status}: ${JSON.stringify(data).slice(0, 400)}`);
+        const rid = res.headers.get?.("x-typesafe-request-id");
+        const tooLong = data?.detail?.error_type === "max_tokens_exceeded";
+        const hint = tooLong ? (longContext ? " (state exceeds even the long-context limit; narrow `reads`)" : " (state + question exceeds 32k tokens per question / 64k per request; narrow `reads` or set longContext)") : "";
+        const err = new Error(`Jev error ${res.status}${hint}: ${JSON.stringify(data).slice(0, 400)}${rid ? ` [request ${rid}]` : ""}`);
         err.status = res.status;
+        err.code = data?.detail?.error_type;
+        err.requestId = rid || null;
         throw err;
       }
       usage.calls++;
@@ -117,12 +141,12 @@ export function createJev({
     return res.json();
   }
 
-  return { ask, noul, nouls, choice, score, models, usage, model, provider: "typesafe" };
+  return { ask, noul, nouls, choice, score, models, usage, model, longContext, provider: "typesafe" };
 }
 
 /** Convert a Noul result into a lattice proof. */
 export function noulToProof(
-  { p, model, latency_ms, cached },
+  { p, model, latency_ms, cached, spread },
   { note = null, instructions = null, state_hash = null, channel = null } = {}
 ) {
   const evidence = {};
@@ -131,6 +155,8 @@ export function noulToProof(
   if (state_hash) evidence.state_hash = state_hash;
   if (channel) evidence.channel = channel;
   if (cached) evidence.cached = true;
+  // measured re-ask spread (stability probe) — lets the gate flag fragile verdicts
+  if (typeof spread === "number") evidence.spread = spread;
   return {
     source_type: "JEV_NOUL",
     provider: "typesafe",

@@ -241,3 +241,66 @@ test("source_thresholds raise the bar for an overconfident source only", () => {
   });
   assert.equal(L.evaluateGoNoGo(n2.id).verdict, "OPEN");
 });
+
+test("margin + fragility: a verdict within the noise band of its bar is flagged", () => {
+  const L = new JEVLattice();
+  const firm = L.ingest({ text: "firm", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.97 } }).node;
+  const thin = L.ingest({ text: "thin", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.91 } }).node;
+  const noisy = L.ingest({ text: "noisy", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.95, evidence: { spread: 0.06 } } }).node;
+  const no = L.ingest({ text: "no", question_spec: { confidence_threshold: 0.9 }, proof: { source_type: "JEV_NOUL", confidence: 0.09 } }).node;
+  const g = id => L.evaluateGoNoGo(id);
+  assert.deepEqual([g(firm.id).verdict, g(firm.id).margin, g(firm.id).fragile], ["GO", 0.07, false]);
+  assert.deepEqual([g(thin.id).verdict, g(thin.id).fragile], ["GO", true], "0.01 above the bar, inside the 0.02 band");
+  assert.equal(g(noisy.id).fragile, true, "measured spread 0.06 > margin 0.05");
+  assert.deepEqual([g(no.id).verdict, g(no.id).fragile], ["REFUTED", true]);
+});
+
+test("COORDINATED margin is the weakest path still needed", () => {
+  const L = new JEVLattice();
+  const { node } = L.ingest({ text: "Q", question_spec: { evaluation_mode: "COORDINATED", required_independent_proofs: 2, confidence_threshold: 0.9 } });
+  L.addProof(node.id, { source_type: "SENSOR", confidence: 0.99 });
+  L.addProof(node.id, { source_type: "JEV_NOUL", confidence: 0.93 });
+  L.addProof(node.id, { source_type: "DETERMINISTIC_PARSER", confidence: 0.96 });
+  assert.equal(L.evaluateGoNoGo(node.id).margin, 0.06, "2nd-best path (0.96) decides; 0.93 is spare");
+});
+
+test("require_firm: a fragile GO needs a spare independent path; a firm GO does not", async () => {
+  const { firmUp } = await import("../orchestrator.mjs");
+  const L = new JEVLattice();
+  const spec = { confidence_threshold: 0.9, require_firm: true };
+  const thin = L.ingest({ text: "thin", question_spec: spec, proof: { source_type: "JEV_NOUL", provider: "typesafe", confidence: 0.91 } }).node;
+  const firm = L.ingest({ text: "firm", question_spec: spec, proof: { source_type: "JEV_NOUL", provider: "typesafe", confidence: 0.98 } }).node;
+  const g = L.evaluateGoNoGo(thin.id);
+  assert.deepEqual([g.verdict, g.needs_corroboration, g.held], ["OPEN", true, "GO"]);
+  assert.equal(L.evaluateGoNoGo(firm.id).verdict, "GO");
+  // re-asking the SAME path cannot corroborate (latest-per-path)
+  L.addProof(thin.id, { source_type: "JEV_NOUL", provider: "typesafe", confidence: 0.905 });
+  assert.equal(L.evaluateGoNoGo(thin.id).needs_corroboration, true);
+  const r = await firmUp(L, { secondPath: async (lat, id) => lat.addProof(id, { source_type: "LLM_CHAIN_OF_THOUGHT", provider: "minimax", confidence: 0.99 }) });
+  assert.equal(r.asked, 1);
+  assert.equal(L.evaluateGoNoGo(thin.id).verdict, "GO");
+});
+
+test("require_firm: a fragile REFUTED needs a second refuting path; disagreement stays OPEN", () => {
+  const L = new JEVLattice();
+  const { node } = L.ingest({ text: "Q", question_spec: { confidence_threshold: 0.9, require_firm: true }, proof: { source_type: "JEV_NOUL", confidence: 0.09 } });
+  assert.equal(L.evaluateGoNoGo(node.id).needs_corroboration, true);
+  L.addProof(node.id, { source_type: "SENSOR", confidence: 0.5 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "OPEN");
+  L.addProof(node.id, { source_type: "SENSOR", confidence: 0.02 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "REFUTED");
+});
+
+test("consolidate scales: 5,000 spread nodes well under a second-scale budget; degree is capped", () => {
+  const L = new JEVLattice();
+  let s = 7;
+  const rnd = () => ((s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+  for (let i = 0; i < 5000; i++) L.createNode({ text: `n${i}`, coords: [rnd() * 40, rnd() * 40] });
+  const t0 = Date.now();
+  const r = L.consolidate({});
+  const ms = Date.now() - t0;
+  assert.ok(ms < 3000, `consolidate took ${ms} ms (v0.5 was O(n²)–O(n³): 3.6 s at 500 nodes)`);
+  const maxOut = Math.max(...L.listNodes().map(n => n.transition_probabilities.length));
+  assert.ok(maxOut <= 2 * 16 + 4, `out-degree ${maxOut} stays near the maxDegree cap`);
+  assert.equal(r.ok, true);
+});

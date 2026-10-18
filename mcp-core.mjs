@@ -4,10 +4,11 @@
  *
  * No Node built-ins here — runs in Workers and browsers too.
  */
+import { factsForFiles, checkFactSpecs } from "./facts.mjs";
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.4.0" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.8.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -35,6 +36,8 @@ const SPEC_SCHEMA = {
     intent: { type: "string" },
     max_proof_age_ms: { type: "number" },
     allowed_sources: { type: "array", items: { type: "string" } },
+    reads: { type: "array", items: { type: "string" }, description: "Evidence files this question depends on (per-file drift; Jev sees only these)" },
+    blocked_sources: { type: "array", items: { type: "string" }, description: "Source types that may not count toward this gate" },
     block_on_conflict: { type: "boolean" },
     source_thresholds: { type: "object", additionalProperties: { type: "number" }, description: "Per source_type thresholds, e.g. {\"SMALL_MODEL\": 0.99}" }
   }
@@ -48,13 +51,60 @@ const STATE_ARG = {
   type: ["string", "object", "array"]
 };
 
+/**
+ * Minimal JSON-Schema check for tool arguments (the subset our inputSchemas use:
+ * type / required / properties / items / enum / minimum / maximum /
+ * additionalProperties-as-schema). Returns null or "path: problem".
+ */
+export function validateArgs(schema, value, path = "arguments") {
+  if (!schema || typeof schema !== "object") return null;
+  const types = Array.isArray(schema.type) ? schema.type : schema.type ? [schema.type] : null;
+  const typeOf = v => (v === null ? "null" : Array.isArray(v) ? "array" : typeof v);
+  if (types) {
+    const t = typeOf(value);
+    const ok = types.some(x => x === t || (x === "integer" && t === "number" && Number.isInteger(value)) || (x === "number" && t === "number" && Number.isFinite(value)));
+    if (!ok) return `${path}: expected ${types.join(" | ")}, got ${t}`;
+  }
+  if (schema.enum && !schema.enum.includes(value)) return `${path}: must be one of ${schema.enum.join(", ")}`;
+  if (typeof value === "number") {
+    if (schema.minimum !== undefined && value < schema.minimum) return `${path}: must be ≥ ${schema.minimum}`;
+    if (schema.maximum !== undefined && value > schema.maximum) return `${path}: must be ≤ ${schema.maximum}`;
+  }
+  if (typeOf(value) === "object") {
+    for (const k of schema.required || []) if (value[k] === undefined) return `${path}.${k}: required`;
+    for (const [k, v] of Object.entries(value)) {
+      const sub = schema.properties?.[k] ?? (typeof schema.additionalProperties === "object" ? schema.additionalProperties : null);
+      const err = sub && validateArgs(sub, v, `${path}.${k}`);
+      if (err) return err;
+    }
+  }
+  if (typeOf(value) === "array" && schema.items) {
+    for (let i = 0; i < value.length; i++) {
+      const err = validateArgs(schema.items, value[i], `${path}[${i}]`);
+      if (err) return err;
+    }
+  }
+  return null;
+}
+
+/**
+ * Curated tool profiles (T39). An agent given 6 tools instead of 23 made 33% fewer calls
+ * and stopped "refuting" unknowable requirements from absence of evidence.
+ */
+export const PROFILES = {
+  gatekeeper: ["jev_ingest", "jev_verify_files", "jev_verify_open", "jev_evaluate_go_no_go", "jev_list_nodes", "jev_get_node"],
+  reader: ["jev_evaluate_go_no_go", "jev_list_nodes", "jev_get_node", "jev_query", "jev_stats", "jev_export_state", "jev_audit"]
+};
+
+export const isMutating = name => MUTATING.has(name);
+
 const MUTATING = new Set([
   "jev_ingest", "jev_add_proof", "jev_invalidate_proof", "jev_consolidate", "jev_import_state",
   "jev_boost", "jev_prune", "jev_verify", "jev_verify_open", "jev_minimax_proof", "jev_decompose",
-  "jev_rollup", "jev_compile", "jev_edge_proof", "jev_invalidate_stale", "jev_predicate_proof"
+  "jev_rollup", "jev_compile", "jev_edge_proof", "jev_invalidate_stale", "jev_predicate_proof", "jev_verify_files", "jev_teach", "jev_sense_probe", "jev_apply_learned"
 ]);
 
-export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false, hasPredicates = false } = {}) {
+export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false, hasPredicates = false, hasSenses = false } = {}) {
   const defs = [
     { name: "jev_ingest", description: "Ingest text as OBSERVATION or QUESTION. For questions pass question_spec (BINARY|COORDINATED) and optional initial proof.",
       inputSchema: { type: "object", properties: {
@@ -76,7 +126,7 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
     { name: "jev_boost", description: "Raise a node's salience.", inputSchema: { type: "object", properties: { id: { type: "string" }, delta: { type: "number" } }, required: ["id"] } },
     { name: "jev_prune", description: "Delete a node and its edges.", inputSchema: ID },
     { name: "jev_invalidate_stale", description: "Drift invalidation by content hash: retire proofs whose recorded evidence (in `channel`) differs from `state`. Proofs on unchanged evidence stay valid.",
-      inputSchema: { type: "object", properties: { state: STATE_ARG, channel: CHANNEL_ARG, reason: { type: "string" } }, required: ["state"] } },
+      inputSchema: { type: "object", properties: { state: STATE_ARG, files: { type: "object", additionalProperties: { type: "string" }, description: "Per-file form: retire proofs whose recorded file hashes changed" }, channel: CHANNEL_ARG, reason: { type: "string" } } } },
     { name: "jev_rollup", description: "Deterministic: if all child sub-questions are GO, add a cheap LATTICE_READ proof to the parent (or a refuting one if a child is REFUTED).", inputSchema: ID },
     { name: "jev_export_state", description: `Export full lattice JSON (schema ${SCHEMA}).`, inputSchema: EMPTY },
     { name: "jev_import_state", description: "Import lattice JSON state (replaces current).",
@@ -89,6 +139,8 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
     defs.push(
       { name: "jev_verify", description: "Ask TypeSafe Jev (calibrated System One model) whether a QUESTION holds given `state`; appends a cheap JEV_NOUL proof.",
         inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG, instructions: { type: "string" }, channel: CHANNEL_ARG }, required: ["id"] } },
+      { name: "jev_verify_files", description: "Per-file verification: `files` = {path: content}. Each open question sees only the files in its question_spec.reads (plus its focus/criteria); proofs record per-file hashes. `quarantine` frames files as untrusted data (use for untrusted input); `facts` = {path: [{name, extract, key|path|pattern, default?}]} adds values computed by trusted extractors (sizes, durations, last directive, env, json, count).",
+        inputSchema: { type: "object", properties: { files: { type: "object", additionalProperties: { type: "string" } }, ids: { type: "array", items: { type: "string" } }, rules: { type: "string" }, quarantine: { type: "boolean" }, strip_comments: { type: "boolean", description: "default true: full-line comments are removed before Jev reads (comment-only injections produced 13–19% wrong GOs without this)" }, facts: { type: "object", additionalProperties: { type: "array", items: { type: "object" } } } }, required: ["files"] } },
       { name: "jev_verify_open", description: "Speculative fan-out: verify every open QUESTION against one shared `state` in a single Jev request. Answers are cached by (state hash, question) when a cache is configured.",
         inputSchema: { type: "object", properties: { state: STATE_ARG, ids: { type: "array", items: { type: "string" } }, channel: CHANNEL_ARG } } }
     );
@@ -116,6 +168,19 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
         inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, question: { type: "string" }, channel: CHANNEL_ARG }, required: ["id", "text"] } }
     );
   }
+  if (hasSenses) {
+    const FILES = { type: "object", additionalProperties: { type: "string" } };
+    defs.push(
+      { name: "jev_teach", description: "Cross-sense teaching: for each DECIDED question, run the weaker senses (jev-whole, jev-paraphrase, workers-ai, compiled) on the same `files` and bank (p, verdict) as a label.",
+        inputSchema: { type: "object", properties: { files: FILES, ids: { type: "array", items: { type: "string" } }, senses: { type: "array", items: { type: "string" } }, rules: { type: "string" } }, required: ["files"] } },
+      { name: "jev_sense_report", description: "Per question × sense: accuracy and Brier against teacher labels, and the learned safe threshold (or why there is none).",
+        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" }, teacherErrorRate: { type: "number", minimum: 0, maximum: 0.5, description: "measured flip rate of the teacher; forgives the disagreements such a teacher would plausibly cause (0 = strict)" } } } },
+      { name: "jev_sense_probe", description: "Run senses with no teacher; return p per question per sense. addProofs=true appends SENSE:<name> proofs.",
+        inputSchema: { type: "object", properties: { files: FILES, ids: { type: "array", items: { type: "string" } }, senses: { type: "array", items: { type: "string" } }, addProofs: { type: "boolean" }, rules: { type: "string" } }, required: ["files"] } },
+      { name: "jev_apply_learned", description: "Write learned per-sense thresholds into each question's spec (source_thresholds) and block senses with no safe threshold (blocked_sources).",
+        inputSchema: { type: "object", properties: { ids: { type: "array", items: { type: "string" } }, minSamples: { type: "number" }, minGo: { type: "number" }, floor: { type: "number", description: "learned thresholds may only go below this…" }, minGoForDiscount: { type: "number", description: "…with at least this many clean GOs in the bank" }, teacherErrorRate: { type: "number", minimum: 0, maximum: 0.5, description: "measured flip rate of the teacher; forgives the disagreements such a teacher would plausibly cause (0 = strict)" } } } }
+    );
+  }
   if (hasJev || hasMiniMax) {
     defs.push({ name: "jev_compile", description: "Progressive compilation for one question: Jev first → MiniMax CoT → decompose + Jev fan-out → roll-up. Stops when decided.",
       inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG }, required: ["id"] } });
@@ -130,17 +195,32 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
  * @param {object} [o.mm]   providers/minimax.mjs client
  * @param {object} [o.small] small/edge model client with json() (Workers AI)
  * @param {object} [o.predicates] sandboxed compiled-predicate store (worker/predicates.mjs)
+ * @param {object} [o.senses] cross-sense teaching suite (senses.mjs createSenseSuite)
  * @param {() => object} [o.capacity]  harness snapshot fn (Node only)
  * @param {() => object} [o.consolidateOpts]
  * @param {() => Promise<void>|void} [o.persist] called after mutating tools
  */
-export function createMcp({ lattice, jev = null, mm = null, small = null, predicates = null, capacity = null, consolidateOpts = () => ({}), persist = null }) {
+export function createMcp({
+  lattice, jev = null, mm = null, small = null, predicates = null, senses = null, capacity = null,
+  consolidateOpts = () => ({}), persist = null,
+  profile = null,        // default tool profile (PROFILES key) for every request
+  extraTools = []        // [{ def, handler(args) , mutating? }] host-specific tools (e.g. audit)
+}) {
   const tools = createToolRegistry(lattice);
-  const defs = toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small, hasPredicates: !!predicates });
+  const defs = [...toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small, hasPredicates: !!predicates, hasSenses: !!senses }), ...extraTools.map(t => t.def)];
+  const extra = new Map(extraTools.map(t => [t.def.name, t]));
+  for (const t of extraTools) if (t.mutating) MUTATING.add(t.def.name);
   const names = new Set(defs.map(d => d.name));
+  /** Tools visible for this request: profile ∩ allow(). */
+  const visible = (ctx = {}) => {
+    const prof = ctx.profile ?? profile;
+    const inProfile = prof && PROFILES[prof] ? new Set(PROFILES[prof]) : null;
+    return defs.filter(d => (!inProfile || inProfile.has(d.name)) && (!ctx.allow || ctx.allow(d.name) === true));
+  };
 
   async function callTool(name, args = {}) {
     if (!names.has(name)) return { ok: false, error: `unknown tool: ${name}` };
+    if (extra.has(name)) return extra.get(name).handler(args);
     switch (name) {
       case "jev_ingest": return tools.ingest(args);
       case "jev_add_proof": return tools.addProof({ id: args.id, proof: args.proof });
@@ -152,7 +232,12 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
         const st = capacity ? { ...tools.stats(), capacity: capacity() } : tools.stats();
         return jev?.cache ? { ...st, proofCache: { ...jev.cache.stats, ttlMs: jev.cache.ttlMs } } : st;
       }
-      case "jev_invalidate_stale": return orch.invalidateStale(lattice, { state: args.state, channel: args.channel, reason: args.reason });
+      case "jev_invalidate_stale": {
+        // file-map form: { files } → per-file invalidation; otherwise whole-state hash
+        if (args.files) return orch.invalidateChangedFiles(lattice, { files: args.files, reason: args.reason });
+        return orch.invalidateStale(lattice, { state: args.state, channel: args.channel, reason: args.reason });
+      }
+      case "jev_verify_files": { const fe = args.facts ? Object.entries(args.facts).flatMap(([f, sp]) => checkFactSpecs(sp, `facts["${f}"]`)) : []; if (fe.length) return { ok: false, error: fe.join("; ") }; } return orch.verifyFiles(lattice, { jev, files: args.files, ids: args.ids, rules: args.rules, quarantine: args.quarantine === true, stripComments: args.strip_comments !== false, facts: args.facts ? factsForFiles(args.files, args.facts) : null });
       case "jev_list_nodes":
         return { ok: true, nodes: lattice.listNodes().map(n => lattice._nodeSummary(n)).map(s => ({ ...s, verdict: s.node_type === "QUESTION" ? lattice.evaluateGoNoGo(s.id).verdict : undefined })) };
       case "jev_get_node": return tools.getNode({ id: args.id });
@@ -167,6 +252,10 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
       case "jev_minimax_proof": return orch.proveWithMiniMax(lattice, args.id, { mm, state: args.state });
       case "jev_decompose": return orch.decompose(lattice, args.id, { mm, maxSub: args.maxSub });
       case "jev_compile": return orch.compile(lattice, args.id, { jev, mm, state: args.state });
+      case "jev_teach": return senses.teach(lattice, args);
+      case "jev_sense_report": return senses.report(lattice, args);
+      case "jev_sense_probe": return senses.probe(lattice, args);
+      case "jev_apply_learned": return senses.apply(lattice, args);
       case "jev_predicate_register": return predicates.register(args);
       case "jev_predicate_proof": return predicates.proof(lattice, args.id, { text: args.text, question: args.question, channel: args.channel });
       case "jev_edge_proof":
@@ -178,7 +267,10 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
   const fail = (id, code, message) => ({ jsonrpc: "2.0", id, error: { code, message } });
 
   /** Handle one JSON-RPC message. Returns a response object, or null for notifications. */
-  async function handle(msg) {
+  /**
+   * ctx (optional, per request): { allow(name) → true | "reason", guard(name, args) → null | "reason", profile }
+   */
+  async function handle(msg, ctx = {}) {
     if (!msg || typeof msg !== "object" || msg.jsonrpc !== "2.0" || typeof msg.method !== "string") {
       return fail(msg?.id ?? null, -32600, "Invalid Request");
     }
@@ -198,12 +290,28 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
         });
       }
       case "ping": return ok(msg.id, {});
-      case "tools/list": return ok(msg.id, { tools: defs });
+      case "tools/list": return ok(msg.id, { tools: visible(ctx) });
       case "tools/call": {
         const name = msg.params?.name;
         if (!names.has(name)) return fail(msg.id, -32602, `Unknown tool: ${name}`);
+        const args = msg.params?.arguments ?? {};
+        const refuse = reason => {
+          const result = { ok: false, error: reason };
+          return ok(msg.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result, isError: true });
+        };
+        if (!visible(ctx).some(d => d.name === name)) {
+          const why = ctx.allow ? ctx.allow(name) : true;
+          return refuse(why === true ? `forbidden: ${name} is not in the "${ctx.profile ?? profile}" tool profile` : `forbidden: ${why}`);
+        }
+        const invalid = validateArgs(defs.find(d => d.name === name).inputSchema, args);
+        if (invalid) {
+          const result = { ok: false, error: `invalid arguments — ${invalid}` };
+          return ok(msg.id, { content: [{ type: "text", text: JSON.stringify(result, null, 2) }], structuredContent: result, isError: true });
+        }
+        const blocked = ctx.guard ? await ctx.guard(name, args) : null;
+        if (blocked) return refuse(blocked);
         try {
-          const result = await callTool(name, msg.params?.arguments || {});
+          const result = await callTool(name, args);
           if (MUTATING.has(name) && persist && result?.ok !== false) await persist();
           return ok(msg.id, {
             content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -219,5 +327,5 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, predic
     }
   }
 
-  return { handle, callTool, defs };
+  return { handle, callTool, defs, visible };
 }

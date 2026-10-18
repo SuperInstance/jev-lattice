@@ -18,44 +18,91 @@ export const COMPILED_COST_WEIGHT = 0.01;
 const CONFIDENT = p => p >= 0.95 || p <= 0.05;
 
 /**
+ * Pull predicate source out of model text: JSON {"code"} first, then a fenced block,
+ * then a bare arrow function. Flash models often answer with a fence instead of JSON.
+ */
+export function extractCode(text) {
+  try {
+    const v = extractJson(text);
+    if (typeof v?.code === "string" && v.code.trim()) return v.code.trim();
+  } catch { /* fall through */ }
+  const fence = String(text || "").match(/```(?:js|javascript)?\s*\n([\s\S]*?)```/);
+  if (fence && /=>/.test(fence[1])) return fence[1].trim().replace(/;\s*$/, "");
+  const arrow = String(text || "").match(/\(?\s*text\s*\)?\s*=>[\s\S]*/);
+  if (arrow) return arrow[0].trim().replace(/;\s*$/, "");
+  throw new Error("no predicate source in model output");
+}
+
+/**
  * Ask MiniMax for a predicate and validate it against confident labels.
  * @param {object} o
  * @param {{text:string, p:number}[]} o.labeled  teacher answers (unconfident ones are ignored)
+ * @param {{text:string, p:number}[]} [o.metamorphic]  teacher answers on meaning-preserving rewrites
+ *   of the training inputs (see metamorphicRewrites). When given, a predicate must agree with these
+ *   too; in R4-D this removed every post-shift error that plain acceptance let through.
+ * @param {number} [o.genRetries]  extra generation tries per attempt when the output is unusable
+ *   (no code, does not compile, truncated) — these don't count as validation attempts
  */
 export async function compilePredicate({
-  mm, question, rules, examples = [], labeled, sandbox, minLabels = 10, maxAttempts = 2, counterexamples = []
+  mm, question, rules, examples = [], labeled, sandbox, minLabels = 10, maxAttempts = 2, counterexamples = [],
+  metamorphic = null, genRetries = 2
 }) {
   const confident = labeled.filter(l => CONFIDENT(l.p));
+  const variants = (metamorphic || []).filter(l => CONFIDENT(l.p));
   let feedback = counterexamples.length
     ? `A previous version was WRONG on these inputs (correct answer given):\n${counterexamples.slice(0, 4).map(c => `answer=${c.expected}\n${c.text}`).join("\n-----\n")}`
     : "";
-  const out = { accepted: false, attempts: 0, confident: confident.length, disagreements: null, code: null };
+  const out = { accepted: false, attempts: 0, generations: 0, confident: confident.length, metamorphic: variants.length, disagreements: null, metamorphic_disagreements: null, code: null };
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     out.attempts = attempt;
-    const res = await mm.chat(`Write a pure JavaScript arrow function \`(text) => boolean\` answering this yes/no question about a config file:
+    let fn, code, genError = null;
+    for (let g = 0; g <= genRetries && !fn; g++) {
+      out.generations++;
+      const retryNote = genError ? `\nYour previous reply was unusable (${genError}). Reply with ONLY the JSON object, keep the function short.` : "";
+      let res;
+      try {
+        res = await mm.chat(`Write a pure JavaScript arrow function \`(text) => boolean\` answering this yes/no question about a config file:
 "${question}"
 Reading rules: ${rules}
 Use only string/regex/array methods; no require, no globals, no I/O. Handle every reading rule, not just the examples.
 Example files:
 ${examples.slice(0, 3).join("\n-----\n")}
 ${feedback}
-Reply with JSON {"code": "<the arrow function source>"}.`, { maxTokens: 8000, temperature: 0 });
-    let fn, code;
-    try {
-      code = extractJson(res.text).code;
-      fn = await sandbox(code);
-    } catch (e) {
-      feedback = `Your previous answer failed to compile: ${e.message}`;
+Reply with JSON {"code": "<the arrow function source>"}.${retryNote}`, { maxTokens: 8000, temperature: g === 0 ? 0 : 0.3 });
+      } catch (e) {
+        genError = e.message;
+        continue;
+      }
+      try {
+        if (res.finish_reason === "length" && !res.text) throw new Error("output truncated by the token limit");
+        code = extractCode(res.text);
+        fn = await sandbox(code);
+      } catch (e) {
+        genError = e.message;
+        fn = null;
+      }
+    }
+    if (!fn) {
+      out.error = genError;
+      feedback = `Your previous answer failed to compile: ${genError}`;
       continue;
     }
-    const bad = [];
-    for (const l of confident) {
-      let got;
-      try { got = await fn(l.text); } catch { got = "threw"; }
-      if (got !== l.p >= 0.95) bad.push({ text: l.text, expected: l.p >= 0.95, got });
-    }
-    out.disagreements = bad.length;
+    const check = async set => {
+      const bad = [];
+      for (const l of set) {
+        let got;
+        try { got = await fn(l.text); } catch { got = "threw"; }
+        if (got !== l.p >= 0.95) bad.push({ text: l.text, expected: l.p >= 0.95, got });
+      }
+      return bad;
+    };
+    const plainBad = await check(confident);
+    const metaBad = plainBad.length ? [] : await check(variants);
+    const bad = [...plainBad, ...metaBad];
+    out.disagreements = plainBad.length;
+    out.metamorphic_disagreements = plainBad.length ? null : metaBad.length;
     out.code = code;
+    delete out.error;
     if (bad.length === 0 && confident.length >= minLabels) {
       out.accepted = true;
       out.fn = fn;
@@ -66,6 +113,35 @@ Reply with JSON {"code": "<the arrow function source>"}.`, { maxTokens: 8000, te
       : "Too few confident labels to validate; make the function robust anyway.";
   }
   return out;
+}
+
+/**
+ * Meaning-preserving rewrites of training inputs, for metamorphic acceptance.
+ * The model rewrites each input; the teacher labels the rewrite; a rewrite is kept only if
+ * every question that is confident on both sides gets the same answer (no ground truth used).
+ * @param {(text:string) => Promise<number[]>} o.teacher  p per question, same order for every text
+ * @param {number[][]} [o.labels]  teacher answers for `texts` if already known
+ * → { rewrites: [{text, of, labels}], proposed, dropped, forQuestion(j) → [{text, p}] }
+ */
+export async function metamorphicRewrites({ mm, texts, teacher, labels = null, n = 2, kind = "configuration file", concurrency = 6 }) {
+  labels ||= await Promise.all(texts.map(t => teacher(t)));
+  const rewrites = [];
+  let proposed = 0, dropped = 0, next = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, texts.length) }, async () => {
+    for (let i; (i = next++) < texts.length; ) {
+      try {
+        const { value } = await mm.json(`Here is a ${kind}:\n${texts[i]}\n\nWrite ${n} different versions of it that mean EXACTLY the same (identical effective settings), but are written differently, using any syntactic variation the format allows. Do not add or remove effective settings.\nReply with JSON {"versions": ["...", "..."]}.`, { maxTokens: 6000, temperature: 0.8 });
+        for (const text of (value.versions || []).slice(0, n)) {
+          proposed++;
+          const ls = await teacher(String(text));
+          const same = ls.every((p, j) => !(CONFIDENT(p) && CONFIDENT(labels[i][j])) || (p >= 0.5) === (labels[i][j] >= 0.5));
+          if (same) rewrites.push({ text: String(text), of: i, labels: ls });
+          else dropped++;
+        }
+      } catch { /* a failed rewrite contributes nothing */ }
+    }
+  }));
+  return { rewrites, proposed, dropped, labels, forQuestion: j => rewrites.map(r => ({ text: r.text, p: r.labels[j] })) };
 }
 
 export function createPredicateRegistry() {

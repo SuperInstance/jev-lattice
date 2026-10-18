@@ -6,12 +6,16 @@
  * Works in Node >=18, browsers, and Cloudflare Workers (fetch only).
  *
  * CLI:
- *   MINIMAX_TOKEN=... node providers/minimax.mjs [--model MiniMax-M3] [--system "..."] "prompt" [file ...]
+ *   MINIMAX_TOKEN=... node providers/minimax.mjs [--model MiniMax-M3 | --think] [--system "..."] "prompt" [file ...]
+ *   default model: MiniMax-M3.1-Flash-Preview; --think uses MiniMax-M3
  *   Files are appended to the prompt; stdin is used when no prompt is given.
  */
 
-export const MINIMAX_DEFAULT_MODEL = "MiniMax-M3";
-export const MINIMAX_FAST_MODEL = "MiniMax-M2.7-highspeed";
+// Default for everyday work (decompose, paraphrase, predicates, JSON); not listed by
+// /v1/models but served. M3 is reserved for "big thinking" (design, ideation, review).
+export const MINIMAX_FAST_MODEL = "MiniMax-M3.1-Flash-Preview";
+export const MINIMAX_THINK_MODEL = "MiniMax-M3";
+export const MINIMAX_DEFAULT_MODEL = MINIMAX_FAST_MODEL;
 const DEFAULT_BASE = "https://api.minimax.io/v1";
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -52,12 +56,27 @@ export function createMiniMax({
   baseUrl = DEFAULT_BASE,
   fetchImpl = globalThis.fetch,
   maxRetries = 3,
-  timeoutMs = 180000
+  // tried in order when the server rejects a model id (status 2013): preview ids come and go
+  fallbackModels = [MINIMAX_THINK_MODEL],
+  // long generations (code, documents) can exceed 180 s; MINIMAX_TIMEOUT_MS overrides everywhere
+  timeoutMs = Number(globalThis.process?.env?.MINIMAX_TIMEOUT_MS) || 180000
 } = {}) {
   if (!apiKey) throw new Error("MiniMax: missing api key (MINIMAX_TOKEN)");
   const usage = { calls: 0, prompt_tokens: 0, completion_tokens: 0 };
 
-  async function chat(messages, { model: m = model, maxTokens = 4096, temperature = 0.3 } = {}) {
+  async function chat(messages, opts = {}) {
+    const chain = [opts.model || model, ...fallbackModels.filter(f => f !== (opts.model || model))];
+    for (let i = 0; ; i++) {
+      try {
+        return await chatOnce(messages, { ...opts, model: chain[i] });
+      } catch (e) {
+        if (e.code !== 2013 || i + 1 >= chain.length) throw e;
+        usage.fallbacks = (usage.fallbacks || 0) + 1;
+      }
+    }
+  }
+
+  async function chatOnce(messages, { model: m = model, maxTokens = 4096, temperature = 0.3 } = {}) {
     if (typeof messages === "string") messages = [{ role: "user", content: messages }];
     let lastErr;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -79,7 +98,7 @@ export function createMiniMax({
           continue;
         }
         if (!res.ok || (code && code !== 0)) {
-          throw new Error(`MiniMax error ${res.status}/${code}: ${data?.base_resp?.status_msg || JSON.stringify(data).slice(0, 300)}`);
+          throw Object.assign(new Error(`MiniMax error ${res.status}/${code}: ${data?.base_resp?.status_msg || JSON.stringify(data).slice(0, 300)}`), { code });
         }
         const msg = data.choices?.[0]?.message || {};
         usage.calls++;
@@ -94,6 +113,7 @@ export function createMiniMax({
         };
       } catch (e) {
         lastErr = e;
+        if (e.name === "AbortError") e.message = `MiniMax request exceeded ${timeoutMs} ms (raise timeoutMs / MINIMAX_TIMEOUT_MS for long generations)`;
         if (e.name !== "AbortError" && !/transient|fetch failed/i.test(e.message)) throw e;
         await sleep(1000 * 2 ** attempt);
       }
@@ -129,6 +149,7 @@ if (isMain) {
   const files = [];
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--model") model = args[++i];
+    else if (args[i] === "--think") model = MINIMAX_THINK_MODEL;
     else if (args[i] === "--system") system = args[++i];
     else if (prompt === undefined) prompt = args[i];
     else files.push(args[i]);
@@ -139,7 +160,7 @@ if (isMain) {
   const messages = system ? [{ role: "system", content: system }, { role: "user", content: prompt }] : prompt;
   const out = await mm.chat(messages, { maxTokens: Number(process.env.MINIMAX_MAX_TOKENS) || 40000 });
   if (!out.text && out.finish_reason === "length") {
-    process.stderr.write("[minimax] reasoning consumed the whole token budget; raise MINIMAX_MAX_TOKENS or use a -highspeed model\n");
+    process.stderr.write("[minimax] reasoning consumed the whole token budget; raise MINIMAX_MAX_TOKENS or use the Flash model\n");
     process.exitCode = 1;
   }
   process.stdout.write(out.text + "\n");

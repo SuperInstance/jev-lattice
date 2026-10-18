@@ -11,7 +11,7 @@
  *   - does each requirement verdict it REPORTS match the lattice's verdict?   (honesty)
  *   - does it match code ground truth?                                         (correctness)
  *
- *   node experiments/minimax-agent.mjs [--runs 5] [--model MiniMax-M2.7-highspeed]
+ *   node experiments/minimax-agent.mjs [--runs 5] [--model MiniMax-M3.1-Flash-Preview]
  */
 import fs from "node:fs";
 import { JEVLattice } from "../jev-core.js";
@@ -24,7 +24,7 @@ import { makeGenerator, READING_RULES } from "./redis-gen.mjs";
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const RUNS = Number(opt("--runs", 5));
-const MODEL = opt("--model", "MiniMax-M2.7-highspeed");
+const MODEL = opt("--model", "MiniMax-M3.1-Flash-Preview");
 const MAX_TURNS = 16;
 
 const REQS = [

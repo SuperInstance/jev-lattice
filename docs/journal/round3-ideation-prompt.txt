@@ -1,0 +1,19 @@
+Context: "JEV lattice" is a library for software decisions. Yes/no QUESTION nodes have deterministic gates:
+BINARY (one proof >= threshold) or COORDINATED (k independent proofs). Verdicts: GO, OPEN, REFUTED, CONFLICT.
+Proof sources and what we measured:
+- TypeSafe Jev: calibrated yes/no (Noul), Choice and Score answers on a JSON "state"; ~100ms; hundreds of questions per call; 0 wrong GOs in 600+ config questions; abstains (stays OPEN) instead of erring on counting questions; not bit-deterministic, so answers are cached by state hash.
+- MiniMax LLM: slow (5-40s), good at decomposing questions and writing small JS predicates.
+- Compiled predicates: model-written code validated against confident Jev labels; safe only in "refute-only" mode (code may say no; a yes needs Jev).
+- Cloudflare: Durable Object per lattice, alarms for idle re-verification, Workers AI small model (overconfident), Dynamic Worker isolates for running predicates, drift detection by content hash.
+
+Task: propose 8 concrete, everyday software-engineering or operations use cases where this pattern (cheap calibrated yes/no checks over a document/state, deterministic gates, caching, drift re-checks) gives real value. Stay within benign engineering domains: CI/CD, code review, docs, data quality, config, infra-as-code, accessibility, release notes, dependency hygiene, support triage, etc. No security exploitation, no personal data.
+
+For each use case give:
+1. name and one-sentence value
+2. the state (what document) and 3-5 example yes/no questions
+3. how ground truth can be produced by code (so we can score without human labels) — this is essential
+4. a hypothesis we could test cheaply, with the metric
+5. which lattice features it exercises
+
+Then rank the 8 by (value x ease of code-computable ground truth) and explain the top 3 in 2 sentences each.
+Be concrete and terse. Plain text, numbered.

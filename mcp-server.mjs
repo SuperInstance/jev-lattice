@@ -12,6 +12,8 @@
  *   JEV_NO_PROVIDERS=1  disable both providers (offline / tests)
  *   JEV_CACHE=0         disable the (state hash, question) proof cache
  *   JEV_CACHE_TTL_MS    cache entry lifetime (default 24h)
+ *   JEV_PROFILE         tool profile: gatekeeper | reader (default: all tools)
+ *   JEV_MODEL           pin the Jev model (e.g. jev-1.13.0); default jev-latest
  */
 import { JEVLattice, SCHEMA } from "./jev-core.js";
 import { createHarness } from "./harness.mjs";
@@ -58,6 +60,7 @@ const jev = rawJev && process.env.JEV_CACHE !== "0"
 const mm = !offline && process.env.MINIMAX_TOKEN ? createMiniMax() : null;
 
 const mcp = createMcp({
+  profile: process.env.JEV_PROFILE || null, // e.g. "gatekeeper" for agents
   lattice,
   jev,
   mm,

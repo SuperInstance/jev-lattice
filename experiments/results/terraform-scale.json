@@ -1,0 +1,649 @@
+{
+  "at": "2026-10-18T02:17:37.685Z",
+  "SIZES": [
+    10,
+    30,
+    100,
+    300
+  ],
+  "PLANS": 24,
+  "SLICE": 20,
+  "report": {
+    "10": {
+      "approxTokens": 599,
+      "whole": {
+        "errors": 0,
+        "correct": 162,
+        "open": 4,
+        "wrongGo": 0,
+        "wrongRef": 2,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 21,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 2
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 2,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-prob": {
+        "errors": 0,
+        "correct": 163,
+        "open": 3,
+        "wrongGo": 0,
+        "wrongRef": 2,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 2
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 2,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-lift": {
+        "errors": 0,
+        "correct": 163,
+        "open": 3,
+        "wrongGo": 0,
+        "wrongRef": 2,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 2
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 2,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      }
+    },
+    "30": {
+      "approxTokens": 1799,
+      "whole": {
+        "errors": 0,
+        "correct": 160,
+        "open": 5,
+        "wrongGo": 0,
+        "wrongRef": 3,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 21,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 3
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 21,
+            "open": 3,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-prob": {
+        "errors": 0,
+        "correct": 148,
+        "open": 17,
+        "wrongGo": 0,
+        "wrongRef": 3,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 21,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 3
+          },
+          {
+            "correct": 22,
+            "open": 2,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 10,
+            "open": 14,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-lift": {
+        "errors": 0,
+        "correct": 162,
+        "open": 3,
+        "wrongGo": 0,
+        "wrongRef": 3,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 21,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 3
+          },
+          {
+            "correct": 22,
+            "open": 2,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      }
+    },
+    "100": {
+      "approxTokens": 5930,
+      "whole": {
+        "errors": 0,
+        "correct": 152,
+        "open": 13,
+        "wrongGo": 0,
+        "wrongRef": 3,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 21,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 3
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 13,
+            "open": 11,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-prob": {
+        "errors": 0,
+        "correct": 93,
+        "open": 74,
+        "wrongGo": 1,
+        "wrongRef": 0,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 9,
+            "open": 15,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 9,
+            "open": 15,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 1,
+            "wrongGo": 1,
+            "wrongRef": 0
+          },
+          {
+            "correct": 12,
+            "open": 12,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 7,
+            "open": 17,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 10,
+            "open": 14,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-lift": {
+        "errors": 0,
+        "correct": 161,
+        "open": 3,
+        "wrongGo": 1,
+        "wrongRef": 3,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 21,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 3
+          },
+          {
+            "correct": 21,
+            "open": 2,
+            "wrongGo": 1,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      }
+    },
+    "300": {
+      "approxTokens": 17866,
+      "whole": {
+        "errors": 0,
+        "correct": 156,
+        "open": 11,
+        "wrongGo": 0,
+        "wrongRef": 1,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 1
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 23,
+            "open": 1,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 15,
+            "open": 9,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-prob": {
+        "errors": 0,
+        "correct": 89,
+        "open": 79,
+        "wrongGo": 0,
+        "wrongRef": 0,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 14,
+            "open": 10,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 5,
+            "open": 19,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 9,
+            "open": 15,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 13,
+            "open": 11,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 12,
+            "open": 12,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 12,
+            "open": 12,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      },
+      "sliced-lift": {
+        "errors": 0,
+        "correct": 164,
+        "open": 2,
+        "wrongGo": 0,
+        "wrongRef": 2,
+        "cases": 168,
+        "perQuestion": [
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 22,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 2
+          },
+          {
+            "correct": 22,
+            "open": 2,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          },
+          {
+            "correct": 24,
+            "open": 0,
+            "wrongGo": 0,
+            "wrongRef": 0
+          }
+        ]
+      }
+    }
+  }
+}

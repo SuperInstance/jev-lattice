@@ -1,0 +1,291 @@
+{
+  "at": "2026-10-18T06:26:04.334Z",
+  "files": {
+    "redis.conf": {
+      "proposed": [],
+      "report": {},
+      "accepted": [],
+      "questionsPerState": "3 → 3",
+      "perQuestion": {}
+    },
+    "nginx.conf": {
+      "proposed": [
+        {
+          "choice": "Which listener configuration is used across the HTTP server blocks in nginx.conf?",
+          "options": [
+            "https_443",
+            "http_80_only",
+            "other_listeners",
+            "not_set"
+          ],
+          "derived": [
+            {
+              "key": "q3",
+              "allowed": [
+                "https_443"
+              ]
+            },
+            {
+              "key": "q9",
+              "allowed": [
+                "http_80_only"
+              ]
+            }
+          ]
+        }
+      ],
+      "report": {
+        "q3": {
+          "agree": 20,
+          "disagree": 0,
+          "ok": true
+        },
+        "q9": {
+          "agree": 11,
+          "disagree": 0,
+          "ok": true
+        }
+      },
+      "accepted": [
+        "q3",
+        "q9"
+      ],
+      "questionsPerState": "4 → 3",
+      "perQuestion": {
+        "q3": {
+          "text": "Does nginx serve HTTPS (listen 443 ssl)?",
+          "derived": {
+            "brier": 0,
+            "ece": 0,
+            "go": 23,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "noul": {
+            "brier": 0.0006,
+            "ece": 0.0225,
+            "go": 23,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        },
+        "q9": {
+          "text": "Does nginx listen only on plain HTTP port 80?",
+          "derived": {
+            "brier": 0,
+            "ece": 0,
+            "go": 17,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "noul": {
+            "brier": 0.0032,
+            "ece": 0.042,
+            "go": 14,
+            "wrongGo": 0,
+            "recall": 0.824
+          }
+        }
+      }
+    },
+    "app.env": {
+      "proposed": [
+        {
+          "choice": "What is the DEBUG setting in app.env?",
+          "options": [
+            "enabled",
+            "disabled",
+            "not set"
+          ],
+          "derived": [
+            {
+              "key": "q6",
+              "allowed": [
+                "disabled"
+              ]
+            },
+            {
+              "key": "q10",
+              "allowed": [
+                "enabled"
+              ]
+            }
+          ]
+        },
+        {
+          "choice": "What is the LOG_LEVEL setting in app.env?",
+          "options": [
+            "debug",
+            "info",
+            "warn",
+            "other",
+            "not set"
+          ],
+          "derived": [
+            {
+              "key": "q7",
+              "allowed": [
+                "info",
+                "warn"
+              ]
+            },
+            {
+              "key": "q11",
+              "allowed": [
+                "debug"
+              ]
+            },
+            {
+              "key": "q12",
+              "allowed": [
+                "warn"
+              ]
+            }
+          ]
+        }
+      ],
+      "report": {
+        "q6": {
+          "agree": 20,
+          "disagree": 0,
+          "ok": true
+        },
+        "q10": {
+          "agree": 20,
+          "disagree": 0,
+          "ok": true
+        },
+        "q7": {
+          "agree": 20,
+          "disagree": 0,
+          "ok": true
+        },
+        "q11": {
+          "agree": 20,
+          "disagree": 0,
+          "ok": true
+        },
+        "q12": {
+          "agree": 20,
+          "disagree": 0,
+          "ok": true
+        }
+      },
+      "accepted": [
+        "q6",
+        "q10",
+        "q7",
+        "q11",
+        "q12"
+      ],
+      "questionsPerState": "6 → 3",
+      "perQuestion": {
+        "q6": {
+          "text": "Is DEBUG disabled in app.env?",
+          "derived": {
+            "brier": 0,
+            "ece": 0,
+            "go": 31,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "noul": {
+            "brier": 0.0004,
+            "ece": 0.019,
+            "go": 31,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        },
+        "q7": {
+          "text": "Is LOG_LEVEL set to info or warn (not debug)?",
+          "derived": {
+            "brier": 0,
+            "ece": 0,
+            "go": 29,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "noul": {
+            "brier": 0.0003,
+            "ece": 0.0167,
+            "go": 29,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        },
+        "q10": {
+          "text": "Is DEBUG enabled in app.env?",
+          "derived": {
+            "brier": 0,
+            "ece": 0,
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "noul": {
+            "brier": 0.0004,
+            "ece": 0.02,
+            "go": 9,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        },
+        "q11": {
+          "text": "Is LOG_LEVEL set to debug?",
+          "derived": {
+            "brier": 0,
+            "ece": 0,
+            "go": 11,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "noul": {
+            "brier": 0.0001,
+            "ece": 0.011,
+            "go": 11,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        },
+        "q12": {
+          "text": "Is LOG_LEVEL set to warn?",
+          "derived": {
+            "brier": 0,
+            "ece": 0,
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          },
+          "noul": {
+            "brier": 0.0001,
+            "ece": 0.011,
+            "go": 15,
+            "wrongGo": 0,
+            "recall": 1
+          }
+        }
+      }
+    }
+  },
+  "totals": {
+    "derived": {
+      "brier": 0,
+      "ece": 0,
+      "go": 135,
+      "wrongGo": 0,
+      "recall": 1
+    },
+    "noul": {
+      "brier": 0.0008,
+      "ece": 0.0203,
+      "go": 132,
+      "wrongGo": 0,
+      "recall": 0.978
+    },
+    "questionsAsked": {
+      "grouped": 360,
+      "nouls": 520
+    }
+  }
+}

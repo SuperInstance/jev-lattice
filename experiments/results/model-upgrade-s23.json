@@ -1,0 +1,70 @@
+{
+  "n_cases": 600,
+  "threshold": 0.9,
+  "old": "jev-1.13.0",
+  "new": "jev-1.14.0",
+  "served": {
+    "old": "jev-1.13.0",
+    "new": "jev-1.14.0"
+  },
+  "reask_noise": {
+    "flips": 15,
+    "rate": 0.025,
+    "mean_abs_dp": 0.0047,
+    "flips_within_0_02_of_bar": 10,
+    "kinds": {
+      "GO→OPEN": 3,
+      "OPEN→REFUTED": 5,
+      "REFUTED→OPEN": 6,
+      "OPEN→GO": 1
+    }
+  },
+  "upgrade": {
+    "flips": 37,
+    "rate": 0.062,
+    "mean_abs_dp": 0.0159,
+    "flips_within_0_02_of_bar": 21,
+    "kinds": {
+      "REFUTED→OPEN": 14,
+      "OPEN→REFUTED": 15,
+      "GO→OPEN": 6,
+      "OPEN→GO": 2
+    }
+  },
+  "upgrade_vs_second_reask": {
+    "flips": 32,
+    "rate": 0.053,
+    "mean_abs_dp": 0.0164,
+    "flips_within_0_02_of_bar": 17,
+    "kinds": {
+      "REFUTED→OPEN": 13,
+      "OPEN→REFUTED": 15,
+      "GO→OPEN": 3,
+      "OPEN→GO": 1
+    }
+  },
+  "quality": {
+    "jev-1.13.0#1": {
+      "decided_correct": 532,
+      "go": 262,
+      "wrong_go": 0,
+      "open": 68,
+      "n": 600
+    },
+    "jev-1.13.0#2": {
+      "decided_correct": 529,
+      "go": 260,
+      "wrong_go": 0,
+      "open": 71,
+      "n": 600
+    },
+    "jev-1.14.0": {
+      "decided_correct": 529,
+      "go": 258,
+      "wrong_go": 0,
+      "open": 71,
+      "n": 600
+    }
+  },
+  "wall_ms": 1235
+}

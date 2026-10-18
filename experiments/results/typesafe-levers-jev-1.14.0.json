@@ -1,0 +1,437 @@
+{
+  "model": "jev-1.14.0",
+  "per": 50,
+  "at": "2026-10-18T15:38:53.590Z",
+  "arms": {
+    "base": {
+      "total": {
+        "n": 400,
+        "correct": 366,
+        "wrongGo": 0,
+        "wrongNo": 3,
+        "open": 31,
+        "brier": 0.0193
+      },
+      "families": {
+        "units": {
+          "n": 50,
+          "correct": 33,
+          "wrongGo": 0,
+          "wrongNo": 1,
+          "open": 16
+        },
+        "override": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "count": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "xref": {
+          "n": 50,
+          "correct": 45,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 5
+        },
+        "duration": {
+          "n": 50,
+          "correct": 47,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 3
+        },
+        "nested": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 50,
+          "correct": 43,
+          "wrongGo": 0,
+          "wrongNo": 2,
+          "open": 5
+        },
+        "default": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "criteria": {
+      "total": {
+        "n": 400,
+        "correct": 369,
+        "wrongGo": 0,
+        "wrongNo": 1,
+        "open": 30,
+        "brier": 0.0157
+      },
+      "families": {
+        "units": {
+          "n": 50,
+          "correct": 30,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 20
+        },
+        "override": {
+          "n": 50,
+          "correct": 48,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "count": {
+          "n": 50,
+          "correct": 48,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "xref": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 50,
+          "correct": 47,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 3
+        },
+        "nested": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 50,
+          "correct": 46,
+          "wrongGo": 0,
+          "wrongNo": 1,
+          "open": 3
+        },
+        "default": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "structured": {
+      "total": {
+        "n": 400,
+        "correct": 368,
+        "wrongGo": 0,
+        "wrongNo": 1,
+        "open": 31,
+        "brier": 0.0135
+      },
+      "families": {
+        "units": {
+          "n": 50,
+          "correct": 32,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 18
+        },
+        "override": {
+          "n": 50,
+          "correct": 48,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 2
+        },
+        "count": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "xref": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "duration": {
+          "n": 50,
+          "correct": 47,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 3
+        },
+        "nested": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 50,
+          "correct": 43,
+          "wrongGo": 0,
+          "wrongNo": 1,
+          "open": 6
+        },
+        "default": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "both": {
+      "total": {
+        "n": 400,
+        "correct": 372,
+        "wrongGo": 0,
+        "wrongNo": 1,
+        "open": 27,
+        "brier": 0.0156
+      },
+      "families": {
+        "units": {
+          "n": 50,
+          "correct": 33,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 17
+        },
+        "override": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "count": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "xref": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 50,
+          "correct": 46,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 4
+        },
+        "nested": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 50,
+          "correct": 45,
+          "wrongGo": 0,
+          "wrongNo": 1,
+          "open": 4
+        },
+        "default": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "facts": {
+      "total": {
+        "n": 400,
+        "correct": 393,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 7,
+        "brier": 0.0025
+      },
+      "families": {
+        "units": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "override": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "count": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "nested": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 50,
+          "correct": 45,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 5
+        },
+        "default": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    },
+    "choice3": {
+      "total": {
+        "n": 400,
+        "correct": 371,
+        "wrongGo": 1,
+        "wrongNo": 2,
+        "open": 26,
+        "brier": 0.0202
+      },
+      "families": {
+        "units": {
+          "n": 50,
+          "correct": 34,
+          "wrongGo": 0,
+          "wrongNo": 1,
+          "open": 15
+        },
+        "override": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 1
+        },
+        "count": {
+          "n": 50,
+          "correct": 49,
+          "wrongGo": 1,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "xref": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "duration": {
+          "n": 50,
+          "correct": 45,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 5
+        },
+        "nested": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        },
+        "range": {
+          "n": 50,
+          "correct": 44,
+          "wrongGo": 0,
+          "wrongNo": 1,
+          "open": 5
+        },
+        "default": {
+          "n": 50,
+          "correct": 50,
+          "wrongGo": 0,
+          "wrongNo": 0,
+          "open": 0
+        }
+      }
+    }
+  },
+  "negation": {
+    "mean_gap": 0.1492,
+    "errors": 2,
+    "errors_with_gap_gt_0_2": 0,
+    "decided_with_gap_gt_0_2": 105,
+    "per_family_gap": {
+      "units": 0.211,
+      "override": 0.115,
+      "count": 0.048,
+      "xref": 0.196,
+      "duration": 0.21,
+      "nested": 0.129,
+      "range": 0.102,
+      "default": 0.184
+    }
+  },
+  "usage": {
+    "calls": 2800,
+    "input_tokens": 1163310,
+    "output_tokens": 72000,
+    "questions": 3200
+  }
+}

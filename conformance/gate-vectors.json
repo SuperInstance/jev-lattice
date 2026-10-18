@@ -1,0 +1,598 @@
+{
+  "schema": "jev-gate-vectors/1",
+  "now": "2026-01-01T00:00:00.000Z",
+  "vectors": [
+    {
+      "name": "no spec, no proofs",
+      "section": "1.1",
+      "question_spec": null,
+      "active_proofs": [],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false,
+        "threshold": 0.85,
+        "margin": null,
+        "fragile": false
+      }
+    },
+    {
+      "name": "binary GO",
+      "section": "2.7",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.95-",
+          "source_type": "PARSER",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "margin": 0.1,
+        "fragile": false
+      }
+    },
+    {
+      "name": "binary GO inside the fragility band",
+      "section": "2.9",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.86-",
+          "source_type": "PARSER",
+          "confidence": 0.86,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "margin": 0.01,
+        "fragile": true
+      }
+    },
+    {
+      "name": "confidence 0 is preserved and refutes",
+      "section": "1.2",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0-",
+          "source_type": "PARSER",
+          "confidence": 0,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "REFUTED",
+        "go": false,
+        "margin": 0.15,
+        "fragile": false
+      }
+    },
+    {
+      "name": "threshold 0: one reading both supports and refutes",
+      "section": "2.5",
+      "question_spec": {
+        "confidence_threshold": 0
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.3-",
+          "source_type": "PARSER",
+          "confidence": 0.3,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "CONFLICT",
+        "go": false
+      }
+    },
+    {
+      "name": "same path twice: latest wins, not max",
+      "section": "2.3",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.95-",
+          "source_type": "PARSER",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        },
+        {
+          "proof_id": "PARSER-0.5-n",
+          "source_type": "PARSER",
+          "confidence": 0.5,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "n": 2
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false,
+        "margin": -0.35,
+        "fragile": false
+      }
+    },
+    {
+      "name": "a re-read clears its own refutation",
+      "section": "4.2",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.1-",
+          "source_type": "PARSER",
+          "confidence": 0.1,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        },
+        {
+          "proof_id": "PARSER-0.95-n",
+          "source_type": "PARSER",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "n": 2
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "margin": 0.1
+      }
+    },
+    {
+      "name": "coordinated: required-th best path decides",
+      "section": "2.8",
+      "question_spec": {
+        "evaluation_mode": "COORDINATED",
+        "required_independent_proofs": 2
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        },
+        {
+          "proof_id": "LLM-0.9-",
+          "source_type": "LLM",
+          "confidence": 0.9,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "margin": 0.05,
+        "fragile": false
+      }
+    },
+    {
+      "name": "coordinated: one of two paths is OPEN",
+      "section": "2.7",
+      "question_spec": {
+        "evaluation_mode": "COORDINATED",
+        "required_independent_proofs": 2
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false,
+        "margin": 0.14,
+        "fragile": false
+      }
+    },
+    {
+      "name": "binary ignores required_independent_proofs",
+      "section": "2.6",
+      "question_spec": {
+        "required_independent_proofs": 3
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "required": 1
+      }
+    },
+    {
+      "name": "invalidated proofs are ignored",
+      "section": "2.2",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-invalidated",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "invalidated": true
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false,
+        "margin": null
+      }
+    },
+    {
+      "name": "expired proofs are ignored",
+      "section": "2.2",
+      "question_spec": {
+        "max_proof_age_ms": 1000
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false,
+        "margin": null
+      }
+    },
+    {
+      "name": "fresh proofs within max age count",
+      "section": "2.2",
+      "question_spec": {
+        "max_proof_age_ms": 7200000
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true
+      }
+    },
+    {
+      "name": "unparseable timestamp drops the proof when age is limited",
+      "section": "2.2",
+      "question_spec": {
+        "max_proof_age_ms": 7200000
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "yesterday-ish"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false
+      }
+    },
+    {
+      "name": "disallowed source is ignored",
+      "section": "2.2",
+      "question_spec": {
+        "allowed_sources": [
+          "PARSER"
+        ]
+      },
+      "active_proofs": [
+        {
+          "proof_id": "LLM-0.99-",
+          "source_type": "LLM",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false
+      }
+    },
+    {
+      "name": "blocked source is ignored",
+      "section": "2.2",
+      "question_spec": {
+        "blocked_sources": [
+          "LLM"
+        ]
+      },
+      "active_proofs": [
+        {
+          "proof_id": "LLM-0.99-",
+          "source_type": "LLM",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        },
+        {
+          "proof_id": "PARSER-0.9-",
+          "source_type": "PARSER",
+          "confidence": 0.9,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "margin": 0.05
+      }
+    },
+    {
+      "name": "per-source bar applies to support",
+      "section": "2.4",
+      "question_spec": {
+        "source_thresholds": {
+          "LLM": 0.95
+        }
+      },
+      "active_proofs": [
+        {
+          "proof_id": "LLM-0.9-",
+          "source_type": "LLM",
+          "confidence": 0.9,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false
+      }
+    },
+    {
+      "name": "per-source bar applies to refutation",
+      "section": "2.4",
+      "question_spec": {
+        "source_thresholds": {
+          "LLM": 0.95
+        }
+      },
+      "active_proofs": [
+        {
+          "proof_id": "LLM-0.07-",
+          "source_type": "LLM",
+          "confidence": 0.07,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false
+      }
+    },
+    {
+      "name": "conflict blocks GO",
+      "section": "2.7",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        },
+        {
+          "proof_id": "LLM-0.05-",
+          "source_type": "LLM",
+          "confidence": 0.05,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "CONFLICT",
+        "go": false
+      }
+    },
+    {
+      "name": "block_on_conflict false lets GO through",
+      "section": "2.7",
+      "question_spec": {
+        "block_on_conflict": false
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.99-",
+          "source_type": "PARSER",
+          "confidence": 0.99,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        },
+        {
+          "proof_id": "LLM-0.05-",
+          "source_type": "LLM",
+          "confidence": 0.05,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "CONFLICT",
+        "go": true
+      }
+    },
+    {
+      "name": "measured spread widens the fragility band",
+      "section": "2.9",
+      "question_spec": {},
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.95-evidence",
+          "source_type": "PARSER",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "evidence": {
+            "spread": 0.2
+          }
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "margin": 0.1,
+        "fragile": true
+      }
+    },
+    {
+      "name": "custom fragility band",
+      "section": "2.9",
+      "question_spec": {
+        "fragility_band": 0.15
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.95-",
+          "source_type": "PARSER",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "fragile": true
+      }
+    },
+    {
+      "name": "require_firm holds a fragile GO",
+      "section": "2.10",
+      "question_spec": {
+        "require_firm": true
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.86-",
+          "source_type": "PARSER",
+          "confidence": 0.86,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false,
+        "needs_corroboration": true,
+        "held": "GO"
+      }
+    },
+    {
+      "name": "require_firm: a firm GO passes",
+      "section": "2.10",
+      "question_spec": {
+        "require_firm": true
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.95-",
+          "source_type": "PARSER",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true
+      }
+    },
+    {
+      "name": "require_firm: a second supporting path corroborates",
+      "section": "2.10",
+      "question_spec": {
+        "require_firm": true
+      },
+      "active_proofs": [
+        {
+          "proof_id": "PARSER-0.86-",
+          "source_type": "PARSER",
+          "confidence": 0.86,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        },
+        {
+          "proof_id": "LLM-0.9-",
+          "source_type": "LLM",
+          "confidence": 0.9,
+          "timestamp": "2025-12-31T23:00:00.000Z"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true
+      }
+    },
+    {
+      "name": "provider separates paths of the same source type",
+      "section": "2.3",
+      "question_spec": {
+        "evaluation_mode": "COORDINATED",
+        "required_independent_proofs": 2
+      },
+      "active_proofs": [
+        {
+          "proof_id": "LLM-0.95-provider",
+          "source_type": "LLM",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "provider": "a"
+        },
+        {
+          "proof_id": "LLM-0.95-provider",
+          "source_type": "LLM",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "provider": "b"
+        }
+      ],
+      "expect": {
+        "verdict": "GO",
+        "go": true,
+        "paths": 2
+      }
+    },
+    {
+      "name": "independence_key overrides provider",
+      "section": "2.3",
+      "question_spec": {
+        "evaluation_mode": "COORDINATED",
+        "required_independent_proofs": 2
+      },
+      "active_proofs": [
+        {
+          "proof_id": "LLM-0.95-providerindependence_key",
+          "source_type": "LLM",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "provider": "a",
+          "independence_key": "k"
+        },
+        {
+          "proof_id": "LLM-0.95-providerindependence_key",
+          "source_type": "LLM",
+          "confidence": 0.95,
+          "timestamp": "2025-12-31T23:00:00.000Z",
+          "provider": "b",
+          "independence_key": "k"
+        }
+      ],
+      "expect": {
+        "verdict": "OPEN",
+        "go": false,
+        "paths": 1
+      }
+    }
+  ]
+}

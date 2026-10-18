@@ -1,0 +1,270 @@
+{
+  "per": 25,
+  "at": "2026-10-18T15:25:35.229Z",
+  "results": {
+    "jev-1.13.0 | files only": {
+      "units": {
+        "n": 25,
+        "correct": 15,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 10,
+        "brier": 0.101
+      },
+      "override": {
+        "n": 25,
+        "correct": 11,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 14,
+        "brier": 0.04
+      },
+      "count": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 1,
+        "wrongNo": 0,
+        "open": 1,
+        "brier": 0.064
+      },
+      "xref": {
+        "n": 25,
+        "correct": 18,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 7,
+        "brier": 0.01
+      },
+      "duration": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.004
+      },
+      "nested": {
+        "n": 25,
+        "correct": 25,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0
+      },
+      "range": {
+        "n": 25,
+        "correct": 24,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 1,
+        "brier": 0.007
+      },
+      "default": {
+        "n": 25,
+        "correct": 12,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 13,
+        "brier": 0.088
+      }
+    },
+    "jev-1.13.0 | files + rules": {
+      "units": {
+        "n": 25,
+        "correct": 16,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 9,
+        "brier": 0.093
+      },
+      "override": {
+        "n": 25,
+        "correct": 21,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 4,
+        "brier": 0.011
+      },
+      "count": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.008
+      },
+      "xref": {
+        "n": 25,
+        "correct": 22,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 3,
+        "brier": 0.007
+      },
+      "duration": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.005
+      },
+      "nested": {
+        "n": 25,
+        "correct": 25,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0
+      },
+      "range": {
+        "n": 25,
+        "correct": 22,
+        "wrongGo": 1,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.038
+      },
+      "default": {
+        "n": 25,
+        "correct": 25,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0.003
+      }
+    },
+    "jev-1.14.0 | files only": {
+      "units": {
+        "n": 25,
+        "correct": 15,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 10,
+        "brier": 0.108
+      },
+      "override": {
+        "n": 25,
+        "correct": 16,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 9,
+        "brier": 0.03
+      },
+      "count": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.035
+      },
+      "xref": {
+        "n": 25,
+        "correct": 13,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 12,
+        "brier": 0.017
+      },
+      "duration": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.002
+      },
+      "nested": {
+        "n": 25,
+        "correct": 25,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0
+      },
+      "range": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.024
+      },
+      "default": {
+        "n": 25,
+        "correct": 12,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 13,
+        "brier": 0.06
+      }
+    },
+    "jev-1.14.0 | files + rules": {
+      "units": {
+        "n": 25,
+        "correct": 17,
+        "wrongGo": 0,
+        "wrongNo": 2,
+        "open": 6,
+        "brier": 0.132
+      },
+      "override": {
+        "n": 25,
+        "correct": 25,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0.001
+      },
+      "count": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.007
+      },
+      "xref": {
+        "n": 25,
+        "correct": 20,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 5,
+        "brier": 0.013
+      },
+      "duration": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.002
+      },
+      "nested": {
+        "n": 25,
+        "correct": 25,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0
+      },
+      "range": {
+        "n": 25,
+        "correct": 23,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 2,
+        "brier": 0.029
+      },
+      "default": {
+        "n": 25,
+        "correct": 25,
+        "wrongGo": 0,
+        "wrongNo": 0,
+        "open": 0,
+        "brier": 0.001
+      }
+    }
+  }
+}

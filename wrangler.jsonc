@@ -11,6 +11,16 @@
     "bindings": [{ "name": "LATTICE", "class_name": "LatticeDO" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["LatticeDO"] }],
+  // control plane: tenant API keys (worker/control.mjs)
+  "d1_databases": [{ "binding": "CONTROL", "database_name": "jev-control", "database_id": "494583bf-4331-45ed-a11b-ea93d7ffe689" }],
+  // per-key request budget (Workers rate limiting; root key exempt)
+  "ratelimits": [{ "name": "RATE_LIMITER", "namespace_id": "1001", "simple": { "limit": 50, "period": 10 } }],
+  "vars": {
+    "JEV_MODEL": "jev-1.13.0",          // pinned: verdicts can move across model versions
+    "JEV_DEFAULT_PROVIDERS": "typesafe", // per-lattice opt-in to minimax, workers-ai, predicates
+    "JEV_MAX_NODES": "5000",
+    "JEV_MAX_PROOFS_PER_NODE": "200"
+  },
   "observability": { "enabled": true }
-  // secrets: JEV_API_KEY (required), TYPESAFE_AI_TOKEN, MINIMAX_TOKEN
+  // secrets: JEV_API_KEY (required, root key), TYPESAFE_AI_TOKEN, MINIMAX_TOKEN
 }

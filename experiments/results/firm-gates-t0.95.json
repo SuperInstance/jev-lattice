@@ -1,0 +1,47 @@
+{
+  "at": "2026-10-18T05:34:04.964Z",
+  "CONFIGS": 16,
+  "T": 0.95,
+  "out": {
+    "plain": {
+      "reproducible": 0.981,
+      "run1": {
+        "correct": 140,
+        "open": 20,
+        "wrongGo": 0,
+        "wrongRef": 0
+      },
+      "run2": {
+        "correct": 141,
+        "open": 19,
+        "wrongGo": 0,
+        "wrongRef": 0
+      },
+      "secondCalls": [
+        0,
+        0
+      ],
+      "n": 160
+    },
+    "firm": {
+      "reproducible": 0.944,
+      "run1": {
+        "correct": 136,
+        "open": 24,
+        "wrongGo": 0,
+        "wrongRef": 0
+      },
+      "run2": {
+        "correct": 134,
+        "open": 26,
+        "wrongGo": 0,
+        "wrongRef": 0
+      },
+      "secondCalls": [
+        25,
+        28
+      ],
+      "n": 160
+    }
+  }
+}

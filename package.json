@@ -1,21 +1,54 @@
 {
   "name": "jev-lattice",
-  "version": "0.4.0",
-  "description": "Question graph with multi-proof verification and deterministic go/no-go — TypeSafe Jev + MiniMax proof providers, MCP server, Cloudflare Durable Object deployment",
+  "version": "0.8.0",
+  "description": "Deterministic go/no-go gates over calibrated evidence: TypeSafe Jev verification, proof cache, per-file drift, MCP server, CLI + GitHub Action, Cloudflare Durable Object deployment",
   "type": "module",
   "main": "jev-core.js",
   "exports": {
-    ".": "./jev-core.js",
-    "./orchestrator": "./orchestrator.mjs",
-    "./proof-cache": "./proof-cache.mjs",
-    "./compiled": "./compiled.mjs",
-    "./calibration": "./calibration.mjs",
-    "./mcp": "./mcp-core.mjs",
-    "./providers/jev": "./providers/jev.mjs",
+    ".": {
+      "types": "./types/jev-core.d.ts",
+      "default": "./jev-core.js"
+    },
+    "./orchestrator": {
+      "types": "./types/orchestrator.d.ts",
+      "default": "./orchestrator.mjs"
+    },
+    "./proof-cache": {
+      "types": "./types/proof-cache.d.ts",
+      "default": "./proof-cache.mjs"
+    },
+    "./gate": {
+      "types": "./types/gate.d.ts",
+      "default": "./gate.mjs"
+    },
+    "./facts": {
+      "types": "./types/facts.d.ts",
+      "default": "./facts.mjs"
+    },
+    "./mcp": {
+      "types": "./types/mcp.d.ts",
+      "default": "./mcp-core.mjs"
+    },
+    "./providers/jev": {
+      "types": "./types/providers-jev.d.ts",
+      "default": "./providers/jev.mjs"
+    },
     "./providers/minimax": "./providers/minimax.mjs",
-    "./providers/workers-ai": "./providers/workers-ai.mjs"
+    "./providers/workers-ai": "./providers/workers-ai.mjs",
+    "./providers/groq": "./providers/groq.mjs",
+    "./providers/deepseek": "./providers/deepseek.mjs",
+    "./providers/openai-compatible": "./providers/openai-compatible.mjs",
+    "./experimental/compiled": "./compiled.mjs",
+    "./experimental/senses": "./senses.mjs",
+    "./experimental/calibration": "./calibration.mjs",
+    "./experimental/grouping": "./grouping.mjs",
+    "./compiled": "./compiled.mjs",
+    "./senses": "./senses.mjs",
+    "./calibration": "./calibration.mjs",
+    "./package.json": "./package.json"
   },
   "bin": {
+    "jev": "./bin/jev.mjs",
     "jev-mcp": "./mcp-server.mjs"
   },
   "scripts": {
@@ -31,13 +64,31 @@
     "live:decompose": "node experiments/decompose-vs-direct.mjs",
     "live:choice-score": "node experiments/choice-score-gates.mjs",
     "live:agent": "node experiments/minimax-agent.mjs",
+    "live:per-file": "node experiments/per-file-drift.mjs",
+    "live:cross-sense": "node experiments/cross-sense.mjs",
+    "live:changelog": "node experiments/changelog.mjs",
+    "live:terraform": "node experiments/terraform-scale.mjs",
+    "live:fragility": "node experiments/fragility.mjs",
+    "live:uninstructed-agent": "node experiments/uninstructed-agent.mjs",
     "mm": "node providers/minimax.mjs",
     "build:assets": "node scripts/build-assets.mjs",
     "dev": "npm run build:assets && wrangler dev",
     "deploy": "npm run build:assets && wrangler deploy",
-    "smoke": "node scripts/smoke-worker.mjs"
+    "smoke": "node scripts/smoke-worker.mjs",
+    "prepublishOnly": "npm test",
+    "gate": "node bin/jev.mjs gate",
+    "typecheck": "tsc -p types/tsconfig.json",
+    "live:model-upgrade": "node experiments/model-upgrade.mjs",
+    "live:compile-reliability": "node experiments/compile-reliability.mjs",
+    "live:grouping-repo": "node experiments/grouping-repo.mjs",
+    "live:typesafe-lab": "node experiments/typesafe-lab.mjs",
+    "live:typesafe-hard": "node experiments/typesafe-hard.mjs",
+    "live:typesafe-levers": "node experiments/typesafe-levers.mjs",
+    "live:typesafe-redteam": "node experiments/typesafe-redteam.mjs",
+    "live:typesafe-product": "node experiments/typesafe-product.mjs"
   },
   "devDependencies": {
+    "typescript": "^5.9.3",
     "wrangler": "^4.151.1"
   },
   "keywords": [
@@ -56,5 +107,55 @@
   "license": "MIT",
   "engines": {
     "node": ">=20"
-  }
+  },
+  "files": [
+    "jev-core.js",
+    "orchestrator.mjs",
+    "proof-cache.mjs",
+    "compiled.mjs",
+    "senses.mjs",
+    "calibration.mjs",
+    "mcp-core.mjs",
+    "mcp-server.mjs",
+    "harness.mjs",
+    "gate.mjs",
+    "grouping.mjs",
+    "types/",
+    "conformance/",
+    "worker/control.mjs",
+    "facts.mjs",
+    "bin/",
+    "providers/",
+    "worker/index.mjs",
+    "worker/predicates.mjs",
+    "browser/",
+    "wrangler.jsonc",
+    "scripts/build-assets.mjs",
+    "scripts/smoke-worker.mjs",
+    "examples/",
+    "action.yml",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md",
+    "LICENSE",
+    "docs/GATE-SEMANTICS.md",
+    "docs/guides/",
+    "docs/MCP.md",
+    "docs/CLOUDFLARE.md",
+    "docs/ARCHITECTURE.md",
+    "docs/PRODUCTION.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SuperInstance/jev-lattice.git"
+  },
+  "homepage": "https://github.com/SuperInstance/jev-lattice#readme",
+  "bugs": {
+    "url": "https://github.com/SuperInstance/jev-lattice/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "types": "./types/jev-core.d.ts"
 }

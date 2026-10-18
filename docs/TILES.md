@@ -31,6 +31,32 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T25 | Sandboxed predicates in Dynamic Worker isolates | `worker/predicates.mjs` | deployed |
 | T26 | Watched state = drift detector | `PUT /api/:lattice/auto-verify` | deployed |
 | T27 | Cheap agent + lattice = honest gatekeeper | `experiments/minimax-agent.mjs` | proven (live) |
+| T28 | Per-file evidence channels (`reads`) | `orchestrator.verifyFiles`, `invalidateChangedFiles` | proven |
+| T29 | Cross-sense teaching (sight calibrates smell) | `senses.mjs`, `jev_teach` / `jev_apply_learned` | proven (edge) |
+| T30 | Earned discount for learned thresholds | `learnThreshold({floor, minGoForDiscount})` | proven (edge) |
+| T31 | Learn the trust direction of code | `experiments/changelog.mjs` | proven |
+| T32 | Choice-as-matcher + Noul veto | `experiments/changelog.mjs` | proven |
+| T33 | Slice the state, lift the verdicts; convolve counts | `experiments/terraform-scale.mjs` | proven |
+| T34 | Margin + fragility on every verdict; stability probe | `evaluateGoNoGo` → `margin`, `fragile`; `stabilityProbe` | proven |
+| T35 | Put thresholds in the gaps of the verifier's score distribution | `experiments/fragility.mjs` | proven |
+| T36 | Metamorphic acceptance for compiled code | `experiments/metamorphic.mjs` | proven (2 runs) |
+| T37 | Noise fails safe; tolerance = the teacher's measured error rate | `learnThreshold({tolerance})` | proven (offline) |
+| T38 | A gate rule on a noisy boundary moves the boundary | `require_firm` (opt-in) | negative result |
+| T39 | Curated tool surface for agents | `experiments/agent-v2.mjs` | proven (edge) |
+| T40 | Automatic Choice-first grouping, validated by Nouls | `grouping.mjs` (was `experiments/choice-grouping.mjs`) | proven, generalised (R5-B) |
+| T41 | Scope by consequence, audit the decision delta | `worker/control.mjs`, `LatticeDO.audited` | deployed |
+| T42 | Authorisation hooks in the protocol core, refusals as results | `mcp-core.mjs` `handle(msg, ctx)` | deployed |
+| T43 | Pin the judge; measure upgrades against the re-ask floor | `JEV_MODEL`, `experiments/model-upgrade.mjs` | proven |
+| T44 | Teacher noise → binomial allowance | `senses.mjs` `allowedDisagreements` | proven (offline) |
+| T45 | Hand-computed conformance vectors | `conformance/` | shipped |
+| T46 | Falsifiable review prompts | `docs/journal/r5-control-plane-review.*` | proven (1 review) |
+| T47 | Let the proposer abstain; key by (group, question) | `grouping.mjs` | proven |
+| T48 | Regenerate unusable output before judging it | `compiled.mjs` `genRetries`, `extractCode` | proven |
+| T49 | Code computes, Jev judges (trusted facts) | `facts.mjs`, `frameEvidence({facts})` | proven (R6) |
+| T50 | Describe what the evidence is | `describeFile`, `frameEvidence` | proven (R6) |
+| T51 | Remove the attack surface, don't argue with it (strip comments) | `stripComments` (default on) | proven (R6) |
+| T52 | Adaptive red team with a reviewer model | `experiments/typesafe-redteam-adaptive.mjs` | method |
+| T53 | Evidence-blind lint | `lintGates`, `jev lint` | shipped |
 
 ---
 
@@ -88,7 +114,7 @@ Tools appear only when their provider is configured: no token, no `jev_verify`. 
 MiniMax (on the max plan) is the high-volume worker: decomposition, writing predicates, review passes, brainstorming. Its output always goes through a gate (T10), a test, or human verification before it counts.
 *Evidence:* in a code review it reported 7 bugs; 1.5 were real. Operational notes:
 - MiniMax-M3 can spend its whole `max_tokens` budget on reasoning and return empty text. The CLI detects this.
-- Use `MiniMax-M2.7-highspeed` for JSON-shaped work.
+- Use `MiniMax-M3.1-Flash-Preview` (the default) for everyday JSON-shaped work and `MiniMax-M3` (`--think`) for big thinking. M2.7-highspeed also spent a whole 12k budget on reasoning for a code-generation task.
 
 ### T16: Content-addressed proof cache
 The cache key is `provider | model | hash(canonical state) | hash(question + criteria)`. Misses go to Jev in one batched call, hits cost nothing, and the stores are interchangeable (memory, or Durable Object storage). Two benefits:
@@ -129,3 +155,85 @@ PUT the current config to `/api/:lattice/auto-verify`. The Durable Object hashes
 
 ### T27: Cheap agent + lattice = honest gatekeeper
 A MiniMax agent given the MCP tool definitions, told to verify through the lattice and report verbatim, got 16/16 deploy decisions right. Its 64/64 reported verdicts matched the lattice, including under explicit pressure to say GO. The deterministic gate is what makes the agent's report checkable.
+
+### T28: Per-file evidence channels
+Questions declare `question_spec.reads`. Jev sees only those files, questions with the same read-set share a call, and proofs record per-file hashes. On a 3-file repo with drift this gave 72% fewer Jev questions **and** better accuracy (1.000 vs 0.951 decided-correct). Focused evidence is better evidence.
+
+### T29: Cross-sense teaching
+A gate decided by the strongest channel labels the weaker channels' readings on the same evidence. A per question × sense label bank (in the Durable Object) learns thresholds or blocks without ground truth; it matched truth-learned thresholds on 29/29 pairs. Spend freed question budget here (P11). **Limit:** the bank inherits the teacher's blind spots (T31).
+
+### T30: Earned discount
+A learned threshold may drop below a floor (e.g. 0.9) only with at least N clean GOs (rule of three: error ≤ ~3/N). This removed the one wrong GO an over-learned bar produced, and kept the recall gains where evidence was plentiful.
+
+### T31: Learn the trust direction of code
+A predicate can fail in either direction: Redis parsers over-claim, a "#123 appears" regex under-claims. Measure the precision of YES and of NO separately, from teacher labels, and trust only the precise direction (refute-only or confirm-only). The teacher's abstentions bias these estimates toward easy cases.
+
+### T32: Choice-as-matcher + Noul veto
+For "is X mentioned in this document?", ask a Choice over the candidate lines plus "none". Paraphrase matches went from 24/72 (Noul) to 72/72. Put the Choice and a Noul on one gate: the Choice proposes, the Noul vetoes through CONFLICT. That gave 241/245 correct and 0 wrong.
+
+### T33: Slice the state, lift the verdicts, convolve counts
+For long structured states, slice them. Combine per-slice verdicts with the quantifier (any/all), **not** by multiplying probabilities: products turn calibration slack into indecision (0.53 vs 0.976 correct at 300 resources). For counts, convolve per-slice Choice distributions: 1.00, where whole-plan counting gave 0.54–0.63.
+
+### T34: Margin and fragility on every verdict
+Every gate result carries `margin` (the deciding reading's distance from its bar) and `fragile` (margin < max(`fragility_band`, measured spread)). Re-ask flips concentrate within 0.02 of the bar: 50% there, 7% at 0.02–0.05, 0% beyond at t=0.9. The flag caught every observed flip among decided gates, while flagging only 4.7% of them at 0.9. `stabilityProbe` re-asks outside the cache and stores the spread on the cache entry, so the cache becomes a measurement rather than only a speedup. *Origin:* an independent measurement posted on PR #1 by the gitpp-side agent.
+
+### T35: Put thresholds in the gaps
+A verifier's readings cluster (Jev: about 0.95–0.99 for yes, 0.01–0.06 for no). A threshold placed inside a cluster makes many verdicts fragile: at 0.95, 42 of 160 gates were within 0.02 of the bar, against 6 at 0.9. Look at the score histogram and put the bar in a sparse region.
+
+### T36: Metamorphic acceptance for compiled code
+Before accepting a predicate, also test it on **meaning-preserving rewrites** of the training inputs. MiniMax writes the rewrites, and Jev confirms each one means the same as its original. In both runs this rejected exactly the brittle predicates: those accepted by plain validation produced 5–8 errors after a format shift, and those accepted metamorphically produced 0. The rewriter was never told what the shift would be.
+
+### T37: Noise fails safe; tolerance = the teacher's measured error rate
+The zero-disagreement learning rule turns teacher noise into conservatism (bars blocked, 0 wrong GOs), not danger. To recover liveness, allow a disagreement rate equal to the teacher's **measured** error rate, and no more: any extra tolerance admits the student's own errors.
+
+### T38: A gate rule on a noisy boundary moves the boundary
+Holding fragile verdicts OPEN until corroborated made gates *less* reproducible, because fragility itself flips near bar + band. Reproducibility comes from caching the evidence-to-reading map, not from more gate rules. Keep `fragile` as an alert; `require_firm` is opt-in.
+
+### T39: Curated tool surface for agents
+With the same agent and prompt, 6 tools instead of 23 meant 33% fewer calls, and the unknowable gate stayed OPEN instead of being "refuted" from absence of evidence (7/8 vs 3/8). Every extra proof source is one more way to manufacture confidence.
+
+### T40: Automatic Choice-first grouping
+MiniMax proposes field-level Choice questions with mappings to the existing yes/no questions. Each mapping is accepted only if it agrees with Jev's Nouls on training data. Accepted mappings beat the Nouls on held-out data (Brier 0.0001 vs 0.0056, recall 1.00 vs 0.965) with 0 wrong.
+
+## Round 5 tiles (v0.7)
+
+### T41: Scope by consequence, audit the decision delta
+Grant permissions by what a call can *change*: `read` (nothing), `verify` (adds evidence), `admin` (replaces the lattice or its policy). Unknown tools default to the middle scope, never to read. Audit by snapshotting the decisions before and after each mutating call and storing only what moved, with the evidence that moved it. That answers "who moved this gate?" directly; a request log can't. *Where:* `worker/control.mjs`, `LatticeDO.audited`.
+
+### T42: Authorisation hooks in the protocol core, refusals as results
+Put `allow(name)` and `guard(name, args)` hooks in the transport-agnostic dispatcher, and return refusals as tool results (`isError`, `forbidden:` / `quota:`) rather than protocol errors. Every transport gets the same enforcement, and agents can read why they were refused. *Where:* `mcp-core.mjs` `handle(msg, ctx)`.
+
+### T43: Pin the judge; measure an upgrade against the re-ask floor
+An upgrade's flips mean something only next to the same model's re-ask flips. Jev 1.13.0 → 1.14.0: 2–2.5× the re-ask flip rate and ≈3× the mean |Δp|, with the same accuracy. Pin the model, key caches on it, and treat an upgrade as a migration (re-verify once, review what moved). *Where:* `JEV_MODEL`, `experiments/model-upgrade.mjs`.
+
+### T44: Teacher noise → a binomial allowance, from a point-estimated audit
+Forgive the number of disagreements that a teacher with flip rate ε would plausibly produce among m samples (`allowedDisagreements(m, ε)`), not a fixed fraction. Estimate ε from a hand-checked sample of at least 30 labels, using the point estimate (the Wilson upper bound let wrong GOs through even with a perfect teacher). It is safe up to about 5% noise; beyond that, fix the teacher. *Where:* `senses.mjs`.
+
+### T45: Hand-computed conformance vectors
+Write the spec's cases as data, with expectations computed from the prose by hand. Never generate them from the implementation. They become a cross-implementation test, and writing them tests the spec itself: this found a false claim about OPEN margins. *Where:* `conformance/gate-vectors.json`.
+
+### T46: Falsifiable review prompts for model reviewers
+Ask a reviewer model for a stated threat model, an exploit sequence per finding, and an explicit "not sure". MiniMax-M3's security review went from 21% to 85% real findings, and its one "not sure" was its one false finding. *Where:* `docs/journal/r5-control-plane-review.*`.
+
+### T47: Let the proposer abstain; key derived answers by (group, question)
+When a model proposes structure (groups, decompositions), the prompt must allow "nothing here". MiniMax then grouped only same-field questions and left three different redis settings alone. Validate each mapping on its own, and key derived values by (group, question), so that two proposals for one question can't overwrite each other. *Where:* `grouping.mjs`.
+
+### T48: Regenerate unusable model output before judging it
+Separate "the output wasn't usable" (no code, a parse or compile error) from "the code was wrong" (disagreed with labels). Regenerate the first cheaply, without spending a validation attempt, and extract code from fences or bare arrows as well as JSON. Usable candidates: 60% → 85–90%. *Where:* `compilePredicate({genRetries})`, `extractCode`.
+
+## Round 6 tiles (v0.8)
+
+### T49: Code computes, Jev judges
+Jev reads literally and is weakest at units, last-wins resolution, defaults and counts. Trusted extractors compute those values and add them to the state next to the file. Hard bench: 179 → 198 of 200 correct (Brier 0.0189 → 0.0011); product path: 106 → 117 of 120. **The facts become an authority**: Jev followed a deliberately wrong fact 9 of 60 times and never sided with the file over it. So extractors are tested code, never model-written, and they report "not set" rather than guess.
+
+### T50: Describe the evidence
+For the same redis.conf, Brier went from 0.0153 (bare string) to 0.0055 when the state said what the file is. `frameEvidence` adds a description by file type.
+
+### T51: Remove the attack surface, don't argue with it
+Framing and criteria against prompt injection held on one model version and broke on the next (2 wrong GOs on 1.14.0 against an adaptive attacker). Deleting semantically void content (full-line comments) with trusted code before the model reads it took wrong GOs from 83–119 of 630 to 0, at no cost in clean accuracy.
+
+### T52: Adaptive red team with a reviewer model
+A one-shot attack list badly underestimates risk: 1 wrong GO in 360 where an adaptive attacker got 33. Give the attacker model the defense and its best scores so far, and iterate; keep the payloads truth-preserving (comment-only) so the score is unambiguous.
+
+### T53: Evidence-blind lint
+Ask every gate about empty versions of its files. A GO means the gate passes when its evidence is absent. One call per file set; it runs before a gate is trusted.

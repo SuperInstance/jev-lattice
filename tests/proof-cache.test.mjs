@@ -146,3 +146,44 @@ test("re-verify after drift: unchanged channels hit cache, changed ones are aske
   assert.equal(back.cached, true);
   assert.equal(raw.seen.calls, 2);
 });
+
+test("per-file evidence: questions see only their files; a change retires only dependent proofs", async () => {
+  const L = new JEVLattice();
+  const raw = noisyJev(0.95);
+  const jev = cachedJev(raw, createProofCache());
+  const qa = L.ingest({ text: "Is TLS on?", question_spec: { confidence_threshold: 0.9, reads: ["redis.conf"] }, linkToNearest: false }).node;
+  const qb = L.ingest({ text: "Is gzip on?", question_spec: { confidence_threshold: 0.9, reads: ["nginx.conf"] }, linkToNearest: false }).node;
+  const qc = L.ingest({ text: "Do they agree?", question_spec: { confidence_threshold: 0.9 }, linkToNearest: false }).node;
+  const files = { "redis.conf": "tls-port 6380", "nginx.conf": "gzip on;" };
+  const r1 = await orch.verifyFiles(L, { jev, files });
+  assert.equal(r1.groups, 3, "three distinct read-sets → three calls");
+  assert.ok(raw.seen.states.some(s => s.includes("redis.conf") && !s.includes("nginx.conf")), "focused state");
+  // nginx changes: qb and qc (reads all) are retired, qa survives
+  const files2 = { ...files, "nginx.conf": "gzip off;" };
+  const inv = await orch.invalidateChangedFiles(L, { files: files2 });
+  assert.equal(inv.invalidated, 2);
+  assert.deepEqual(inv.changedFiles, ["nginx.conf"]);
+  assert.equal(L.evaluateGoNoGo(qa.id).go, true);
+  assert.equal(L.evaluateGoNoGo(qb.id).open, true);
+  const r2 = await orch.verifyFiles(L, { jev, files: files2 });
+  assert.equal(r2.verified, 2, "only the reopened questions are asked");
+  // revert nginx: per-file state for qb is back to the old bytes → cache hit
+  await orch.invalidateChangedFiles(L, { files });
+  const r3 = await orch.verifyFiles(L, { jev, files });
+  assert.ok(r3.cacheHits >= 2);
+  assert.equal(L.getNode(qc.id).question_spec.reads, null);
+});
+
+test("stabilityProbe measures spread outside the cache and annotates the entry", async () => {
+  const { stabilityProbe } = await import("../proof-cache.mjs");
+  const raw = noisyJev(0.9); // jitters 0.90 / 0.94 / 0.98
+  const cache = createProofCache();
+  const cj = cachedJev(raw, cache);
+  await cj.nouls({ c: 1 }, [{ key: "q", instructions: "Q?" }]);
+  const probe = await stabilityProbe(raw, { c: 1 }, [{ key: "q", instructions: "Q?" }], { n: 3, cache });
+  assert.equal(probe.q.samples.length, 3);
+  assert.ok(probe.q.spread > 0);
+  const again = await cj.noul({ c: 1 }, "Q?");
+  assert.equal(again.cached, true);
+  assert.equal(again.spread, probe.q.spread, "cached answers now carry their measured noise");
+});

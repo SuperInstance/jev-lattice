@@ -1,0 +1,305 @@
+{
+  "at": "2026-10-18T05:32:54.777Z",
+  "report": {
+    "oracle": {
+      "strict (tolerance 0) | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 0,
+        "t": 0.96,
+        "go": 60,
+        "wrongGo": 0,
+        "recall": 0.619
+      },
+      "strict (tolerance 0) | minimax": {
+        "labelled": 200,
+        "teacherErr": 0,
+        "t": 0.5,
+        "go": 97,
+        "wrongGo": 0,
+        "recall": 1
+      },
+      "tolerance 3% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 0,
+        "t": 0.96,
+        "go": 60,
+        "wrongGo": 0,
+        "recall": 0.619
+      },
+      "tolerance 3% | minimax": {
+        "labelled": 200,
+        "teacherErr": 0,
+        "t": 0.5,
+        "go": 97,
+        "wrongGo": 0,
+        "recall": 1
+      },
+      "tolerance 6% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 0,
+        "t": 0.91,
+        "go": 78,
+        "wrongGo": 0,
+        "recall": 0.804
+      },
+      "tolerance 6% | minimax": {
+        "labelled": 200,
+        "teacherErr": 0,
+        "t": 0.5,
+        "go": 97,
+        "wrongGo": 0,
+        "recall": 1
+      }
+    },
+    "jev (real)": {
+      "strict (tolerance 0) | workers-ai": {
+        "labelled": 179,
+        "teacherErr": 0,
+        "t": 0.96,
+        "go": 60,
+        "wrongGo": 0,
+        "recall": 0.619
+      },
+      "strict (tolerance 0) | minimax": {
+        "labelled": 179,
+        "teacherErr": 0,
+        "t": 0.5,
+        "go": 97,
+        "wrongGo": 0,
+        "recall": 1
+      },
+      "tolerance 3% | workers-ai": {
+        "labelled": 179,
+        "teacherErr": 0,
+        "t": 0.91,
+        "go": 78,
+        "wrongGo": 0,
+        "recall": 0.804
+      },
+      "tolerance 3% | minimax": {
+        "labelled": 179,
+        "teacherErr": 0,
+        "t": 0.5,
+        "go": 97,
+        "wrongGo": 0,
+        "recall": 1
+      },
+      "tolerance 6% | workers-ai": {
+        "labelled": 179,
+        "teacherErr": 0,
+        "t": 0.91,
+        "go": 78,
+        "wrongGo": 0,
+        "recall": 0.804
+      },
+      "tolerance 6% | minimax": {
+        "labelled": 179,
+        "teacherErr": 0,
+        "t": 0.5,
+        "go": 97,
+        "wrongGo": 0,
+        "recall": 1
+      }
+    },
+    "flip 2%": {
+      "strict (tolerance 0) | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 3.5,
+        "t": "0.96–1 (4/20 blocked)",
+        "go": 13.2,
+        "wrongGo": 0,
+        "recall": 0.136
+      },
+      "strict (tolerance 0) | minimax": {
+        "labelled": 200,
+        "teacherErr": 3.5,
+        "t": "0.5–1 (12/20 blocked)",
+        "go": 37,
+        "wrongGo": 0,
+        "recall": 0.381
+      },
+      "tolerance 3% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 3.5,
+        "t": "0.96–1 (3/20 blocked)",
+        "go": 36.5,
+        "wrongGo": 0,
+        "recall": 0.377
+      },
+      "tolerance 3% | minimax": {
+        "labelled": 200,
+        "teacherErr": 3.5,
+        "t": "0.5–1 (2/20 blocked)",
+        "go": 86.8,
+        "wrongGo": 0,
+        "recall": 0.895
+      },
+      "tolerance 6% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 3.5,
+        "t": "0.91–0.96",
+        "go": 70.8,
+        "wrongGo": 0,
+        "recall": 0.73
+      },
+      "tolerance 6% | minimax": {
+        "labelled": 200,
+        "teacherErr": 3.5,
+        "t": "0.5–0.5",
+        "go": 97,
+        "wrongGo": 0,
+        "recall": 1
+      }
+    },
+    "flip 5%": {
+      "strict (tolerance 0) | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 9.3,
+        "t": "0.96–1 (6/20 blocked)",
+        "go": 7.2,
+        "wrongGo": 0,
+        "recall": 0.074
+      },
+      "strict (tolerance 0) | minimax": {
+        "labelled": 200,
+        "teacherErr": 9.3,
+        "t": "1–1 (19/20 blocked)",
+        "go": 4.4,
+        "wrongGo": 0,
+        "recall": 0.045
+      },
+      "tolerance 3% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 9.3,
+        "t": "0.96–1 (6/20 blocked)",
+        "go": 13,
+        "wrongGo": 0,
+        "recall": 0.134
+      },
+      "tolerance 3% | minimax": {
+        "labelled": 200,
+        "teacherErr": 9.3,
+        "t": "0.5–1 (12/20 blocked)",
+        "go": 36.5,
+        "wrongGo": 0,
+        "recall": 0.377
+      },
+      "tolerance 6% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 9.3,
+        "t": "0.91–1 (2/20 blocked)",
+        "go": 48,
+        "wrongGo": 0,
+        "recall": 0.495
+      },
+      "tolerance 6% | minimax": {
+        "labelled": 200,
+        "teacherErr": 9.3,
+        "t": "0.5–1 (2/20 blocked)",
+        "go": 86,
+        "wrongGo": 0,
+        "recall": 0.886
+      }
+    },
+    "flip 10%": {
+      "strict (tolerance 0) | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 20.3,
+        "t": "1–1 (10/20 blocked)",
+        "go": 1,
+        "wrongGo": 0,
+        "recall": 0.01
+      },
+      "strict (tolerance 0) | minimax": {
+        "labelled": 200,
+        "teacherErr": 20.3,
+        "t": "1–1 (19/20 blocked)",
+        "go": 4.4,
+        "wrongGo": 0,
+        "recall": 0.045
+      },
+      "tolerance 3% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 20.3,
+        "t": "1–1 (10/20 blocked)",
+        "go": 1,
+        "wrongGo": 0,
+        "recall": 0.01
+      },
+      "tolerance 3% | minimax": {
+        "labelled": 200,
+        "teacherErr": 20.3,
+        "t": "1–1 (19/20 blocked)",
+        "go": 4.4,
+        "wrongGo": 0,
+        "recall": 0.045
+      },
+      "tolerance 6% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 20.3,
+        "t": "0.96–1 (10/20 blocked)",
+        "go": 6.8,
+        "wrongGo": 0,
+        "recall": 0.07
+      },
+      "tolerance 6% | minimax": {
+        "labelled": 200,
+        "teacherErr": 20.3,
+        "t": "0.5–1 (14/20 blocked)",
+        "go": 26.9,
+        "wrongGo": 0,
+        "recall": 0.277
+      }
+    },
+    "flip 20%": {
+      "strict (tolerance 0) | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 41.3,
+        "t": "1–1 (16/20 blocked)",
+        "go": 0.4,
+        "wrongGo": 0,
+        "recall": 0.004
+      },
+      "strict (tolerance 0) | minimax": {
+        "labelled": 200,
+        "teacherErr": 41.3,
+        "t": "blocked",
+        "go": 0,
+        "wrongGo": 0,
+        "recall": 0
+      },
+      "tolerance 3% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 41.3,
+        "t": "1–1 (16/20 blocked)",
+        "go": 0.4,
+        "wrongGo": 0,
+        "recall": 0.004
+      },
+      "tolerance 3% | minimax": {
+        "labelled": 200,
+        "teacherErr": 41.3,
+        "t": "blocked",
+        "go": 0,
+        "wrongGo": 0,
+        "recall": 0
+      },
+      "tolerance 6% | workers-ai": {
+        "labelled": 200,
+        "teacherErr": 41.3,
+        "t": "1–1 (16/20 blocked)",
+        "go": 0.4,
+        "wrongGo": 0,
+        "recall": 0.004
+      },
+      "tolerance 6% | minimax": {
+        "labelled": 200,
+        "teacherErr": 41.3,
+        "t": "blocked",
+        "go": 0,
+        "wrongGo": 0,
+        "recall": 0
+      }
+    }
+  }
+}

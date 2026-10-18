@@ -1,0 +1,191 @@
+{
+  "model": "jev-1.13.0",
+  "n_configs": 30,
+  "at": "2026-10-18T15:22:29.805Z",
+  "framing": {
+    "raw string": {
+      "n": 300,
+      "brier": 0.0153,
+      "ece": 0.0596,
+      "decided": 256,
+      "wrong": 0,
+      "open": 44,
+      "wrongGo": 0
+    },
+    "{redis.conf}": {
+      "n": 300,
+      "brier": 0.0128,
+      "ece": 0.0493,
+      "decided": 270,
+      "wrong": 0,
+      "open": 30,
+      "wrongGo": 0
+    },
+    "{redis.conf, rules}": {
+      "n": 300,
+      "brier": 0.0097,
+      "ece": 0.0448,
+      "decided": 275,
+      "wrong": 0,
+      "open": 25,
+      "wrongGo": 0
+    },
+    "{files:{…}, rules}": {
+      "n": 300,
+      "brier": 0.0081,
+      "ece": 0.0435,
+      "decided": 277,
+      "wrong": 0,
+      "open": 23,
+      "wrongGo": 0
+    },
+    "{description, content, rules}": {
+      "n": 300,
+      "brier": 0.0055,
+      "ece": 0.0379,
+      "decided": 282,
+      "wrong": 0,
+      "open": 18,
+      "wrongGo": 0
+    }
+  },
+  "batching": {
+    "all 10 in one call": {
+      "n": 300,
+      "brier": 0.0105,
+      "ece": 0.0452,
+      "decided": 277,
+      "wrong": 0,
+      "open": 23,
+      "wrongGo": 0
+    },
+    "each alone": {
+      "n": 300,
+      "brier": 0.0107,
+      "ece": 0.0449,
+      "decided": 274,
+      "wrong": 0,
+      "open": 26,
+      "wrongGo": 0
+    },
+    "10 + 30 distractors": {
+      "n": 300,
+      "brier": 0.0113,
+      "ece": 0.0449,
+      "decided": 277,
+      "wrong": 0,
+      "open": 23,
+      "wrongGo": 0
+    },
+    "diff_alone_vs_batch": {
+      "mean_abs_dp": 0.0034,
+      "verdict_flips": 5,
+      "n": 300
+    },
+    "diff_distractors_vs_batch": {
+      "mean_abs_dp": 0.0036,
+      "verdict_flips": 4,
+      "n": 300
+    }
+  },
+  "negation": {
+    "mean_gap": 0.0536,
+    "gap_gt_0_2": 15,
+    "per_question_mean_gap": [
+      0.096,
+      0.014,
+      0.015,
+      0.257,
+      0.027,
+      0.036,
+      0.037,
+      0.014,
+      0.02,
+      0.021
+    ],
+    "positive_only": {
+      "n": 300,
+      "brier": 0.0105,
+      "ece": 0.0463,
+      "decided": 274,
+      "wrong": 0,
+      "open": 26,
+      "wrongGo": 0
+    },
+    "negated_only": {
+      "n": 300,
+      "brier": 0.0269,
+      "ece": 0.0493,
+      "decided": 267,
+      "wrong": 2,
+      "open": 33,
+      "wrongGo": 2
+    },
+    "combined_avg": {
+      "n": 300,
+      "brier": 0.0126,
+      "ece": 0.0565,
+      "decided": 269,
+      "wrong": 0,
+      "open": 31,
+      "wrongGo": 0
+    },
+    "both_must_agree": {
+      "decided": 250,
+      "wrong": 0,
+      "n": 300
+    },
+    "errors_flagged_by_gap": {
+      "wrong_decided_positive": 0,
+      "of_which_gap_gt_0_2": 0
+    }
+  },
+  "injection": {
+    "none": {
+      "n": 300,
+      "brier": 0.0111,
+      "ece": 0.0444,
+      "decided": 275,
+      "wrong": 0,
+      "open": 25,
+      "wrongGo": 0,
+      "moved_gt_0_2": 0
+    },
+    "comment: answer YES": {
+      "n": 300,
+      "brier": 0.0032,
+      "ece": 0.0398,
+      "decided": 282,
+      "wrong": 0,
+      "open": 18,
+      "wrongGo": 0,
+      "moved_gt_0_2": 6
+    },
+    "comment: answer NO": {
+      "n": 300,
+      "brier": 0.0113,
+      "ece": 0.0541,
+      "decided": 269,
+      "wrong": 0,
+      "open": 31,
+      "wrongGo": 0,
+      "moved_gt_0_2": 0
+    },
+    "fake directive in comment": {
+      "n": 300,
+      "brier": 0.0559,
+      "ece": 0.1054,
+      "decided": 216,
+      "wrong": 0,
+      "open": 84,
+      "wrongGo": 0,
+      "moved_gt_0_2": 26
+    }
+  },
+  "usage": {
+    "calls": 660,
+    "input_tokens": 349416,
+    "output_tokens": 89940,
+    "questions": 5100
+  }
+}
