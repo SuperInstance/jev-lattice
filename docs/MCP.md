@@ -22,16 +22,38 @@ Environment:
 
 ## Tools
 
-See main README for full list. Names are prefixed `jev_` on the wire:
+Names are prefixed `jev_` on the wire. Availability depends on what's configured: tools whose provider is missing are not listed.
 
-- `jev_ingest`, `jev_add_proof`, `jev_invalidate_proof`, `jev_invalidate_stale`, `jev_evaluate_go_no_go`
-- `jev_query`, `jev_consolidate`, `jev_stats`, `jev_rollup`
-- `jev_list_nodes`, `jev_get_node`, `jev_boost`, `jev_prune`
-- `jev_export_state`, `jev_import_state`
-- `jev_capacity` (stdio only)
-- with providers: `jev_verify`, `jev_verify_open`, `jev_minimax_proof`, `jev_decompose`, `jev_compile`, `jev_edge_proof` (Worker only)
+| tool | needs | arguments (required in **bold**) | what it does |
+|---|---|---|---|
+| `jev_ingest` | — | **text**, tags, node_type, question_spec, proof | Create an OBSERVATION or a QUESTION |
+| `jev_add_proof` | — | **id**, **proof** | Append a proof (latest per path counts) |
+| `jev_invalidate_proof` | — | **id**, **proof_id**, reason | Kill one path; kept for audit |
+| `jev_invalidate_stale` | — | state *or* files, channel, reason | Drift: retire proofs whose recorded evidence hash changed |
+| `jev_evaluate_go_no_go` | — | **id** | Verdict + margin + fragile |
+| `jev_list_nodes` / `jev_get_node` | — | / **id** | Summaries with verdicts / the full node |
+| `jev_query` | — | text, tags, topK, beam | Beam search over the graph |
+| `jev_consolidate` | — | — | Idle cycle |
+| `jev_rollup` | — | **id** | Children → parent `LATTICE_READ` proof |
+| `jev_boost` / `jev_prune` | — | **id** | Housekeeping |
+| `jev_stats` | — | — | Counts (+ capacity, cache stats) |
+| `jev_export_state` / `jev_import_state` | — | / **state** | Portable snapshot |
+| `jev_capacity` | stdio | — | Host probe + policy tier |
+| `jev_verify` | Jev | **id**, state, instructions, channel | One question → `JEV_NOUL` proof |
+| `jev_verify_open` | Jev | state, ids, channel | All open questions, one shared state, one call |
+| `jev_verify_files` | Jev | **files**, ids, rules | Per-file evidence via `question_spec.reads` |
+| `jev_minimax_proof` | MiniMax | **id**, state | LLM chain-of-thought proof |
+| `jev_decompose` | MiniMax | **id**, maxSub | Sub-questions as BINARY children |
+| `jev_compile` | Jev or MiniMax | **id**, state | Cheap-first loop: Jev → MiniMax → decompose → roll-up |
+| `jev_edge_proof` | Worker (Workers AI) | **id**, state | `SMALL_MODEL` proof |
+| `jev_predicate_register` | Worker (Loader) | **question**, **code**, **labels** | Sandboxed predicate, validated in its isolate |
+| `jev_predicate_proof` | Worker (Loader) | **id**, **text**, question, channel | Compiled YES = 0.8 (hint), NO = 0.01 |
+| `jev_teach` | Jev (Worker) | **files**, ids, senses, rules | Decided gates label each sense's reading |
+| `jev_sense_report` | Jev (Worker) | ids, minSamples, minGo, floor, minGoForDiscount | Per question × sense reliability + learned bar |
+| `jev_sense_probe` | Jev (Worker) | **files**, ids, senses, addProofs, rules | Run senses with no teacher |
+| `jev_apply_learned` | Jev (Worker) | ids, minSamples, minGo, floor, minGoForDiscount | Write learned bars / blocks into each spec |
 
-Mutating calls persist state to `JEV_STATE_PATH`.
+Mutating calls persist state: to `JEV_STATE_PATH` on stdio, to Durable Object storage on the Worker.
 
 ## Example session (conceptual)
 

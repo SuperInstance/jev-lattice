@@ -1,151 +1,268 @@
-# JEV Lattice v0.3
+# JEV Lattice
 
-**A graph of questions with explicit proof contracts.** Go/no-go is a deterministic lattice read, not an LLM opinion. Proofs come from cheap and expensive verifiers, which compound when they are independent, and the system compiles itself toward the cheapest path that still holds.
+**Deterministic go/no-go gates for software decisions, backed by calibrated evidence.**
+
+You write a decision as a yes/no **question** with an explicit contract, for example "two independent proofs, each at least 0.9". Evidence arrives as **proofs** from any mix of verifiers:
+- [TypeSafe Jev](https://docs.typesafe.ai), a calibrated yes/no model;
+- parsers, sensors and compiled code;
+- LLMs such as MiniMax or Cloudflare Workers AI.
+
+The gate's verdict (**GO / OPEN / REFUTED / CONFLICT**) is computed by deterministic code, never by a model. It is cached, reproducible and auditable, it reports how close each verdict is to flipping, and it re-checks itself when the evidence changes.
 
 ```
-          ┌──────────── proof providers (append proofs, never decide) ────────────┐
-          │  TypeSafe Jev     JEV_NOUL              cost 0.05   ~100 ms, calibrated │
-          │  MiniMax          LLM_CHAIN_OF_THOUGHT  cost 0.85   ~5–40 s, discovery   │
-          │  Workers AI       SMALL_MODEL           cost 0.15   edge, overconfident  │
-          │  compiled code    DETERMINISTIC_PARSER  cost 0.01   µs, written by MiniMax│
-          │  roll-up          LATTICE_READ          cost 0.01   children all GO       │
-          └────────────────────────────────┬──────────────────────────────────────┘
-                                           ▼
-   jev-core.js  ── QUESTION { question_spec, active_proofs } ──▶ evaluateGoNoGo → GO | OPEN | REFUTED | CONFLICT
-                                           │
-         ┌─────────────────┬───────────────┴──────────┬──────────────────────────┐
-     browser/          mcp-server.mjs             worker/ (Cloudflare)       orchestrator.mjs
-     canvas UI        stdio MCP + harness     Durable Object per lattice    verify · fan-out · decompose
-     + edge sync      (any MCP host)          MCP over HTTP · alarms        roll-up · compile loop
+ evidence (files, plans, logs) ──▶ verifiers ──▶ proofs ──▶ QUESTION gate ──▶ GO | OPEN | REFUTED | CONFLICT
+                                    Jev · code · LLMs        (deterministic)     + margin, fragile
 ```
 
-Same schema (`jev-lattice/v0.3`, reads v0.2) everywhere. State is portable JSON.
+It runs in four places with one schema: a **JS library**, an **MCP server** (stdio), a **Cloudflare Worker** (MCP over HTTP, with a Durable Object per lattice) and a **browser UI**.
 
-## Quick start
+---
+
+## Contents
+1. [Quick start (5 minutes)](#quick-start-5-minutes)
+2. [Core concepts](#core-concepts)
+3. [How-to guides](#how-to-guides)
+4. [Configuration](#configuration)
+5. [Testing](#testing)
+6. [Troubleshooting](#troubleshooting)
+7. [Documentation map (by role)](#documentation-map-by-role)
+8. [What we've measured](#what-weve-measured)
+9. [Layout](#layout)
+
+---
+
+## Quick start (5 minutes)
+
+**Requirements:** Node ≥ 20. Nothing else for the core. API tokens are needed only for live verifiers.
 
 ```bash
-npm install          # only dev dependency: wrangler
-npm test             # offline: 30 v0.2 assertions + 53 node:test cases (regressions, orchestrator, proof cache, compiled, calibration, MCP e2e)
-npm run example      # progressive compilation demo, no network
-
-# live (needs TYPESAFE_AI_TOKEN and/or MINIMAX_TOKEN)
-npm run live:compile          # Jev → MiniMax → decompose → fan-out → roll-up, then config drift
-npm run live:calibration      # verifier calibration bench vs code-computed ground truth
-npm run live:compile-parser   # MiniMax writes parsers, Jev grades them, held-out test
-npm run live:proof-cache      # multi-turn agent workload: naive vs hash-invalidation vs cache
-npm run live:compiled-first   # compiled predicates under distribution shift (add --compile-rules base)
-npm run live:decompose        # direct vs decomposed composites (AND and m-of-k)
-npm run live:choice-score     # Choice/Score-derived gates vs one Noul per proposition
-npm run live:agent            # MiniMax agent drives the lattice via MCP tools (add --pressure)
-
-npm run mcp          # MCP stdio server (state → ./jev-state.json)
-npm run dev          # Worker + Durable Object locally (secrets in .dev.vars)
-npm run deploy       # Cloudflare
+git clone https://github.com/SuperInstance/jev-lattice && cd jev-lattice
+npm install            # only dev dependency: wrangler (for the Cloudflare deployment)
+npm test               # offline test suite, no network or tokens needed
+node examples/quickstart.mjs
 ```
 
-## Gate semantics
+`examples/quickstart.mjs` runs offline, and `tests/examples.test.mjs` checks its output, so this snippet can't go stale:
 
-| `question_spec` field | Meaning |
+```js
+import { JEVLattice } from "./jev-core.js";
+
+const lattice = new JEVLattice();
+const { node } = lattice.ingest({
+  text: "Is the cache safe to deploy?",
+  question_spec: { evaluation_mode: "COORDINATED", required_independent_proofs: 2, confidence_threshold: 0.9 }
+});
+
+lattice.addProof(node.id, { source_type: "DETERMINISTIC_PARSER", provider: "redis-conf", confidence: 0.99 });
+lattice.evaluateGoNoGo(node.id).verdict;   // "OPEN"  (1 of 2 paths)
+
+lattice.addProof(node.id, { source_type: "JEV_NOUL", provider: "typesafe", confidence: 0.95 });
+lattice.evaluateGoNoGo(node.id);           // { verdict: "GO", reason: "2/2 independent proofs satisfied", margin: 0.05, fragile: false, … }
+
+lattice.invalidateProof(node.id, node.active_proofs[0].proof_id, "redis.conf changed");
+lattice.evaluateGoNoGo(node.id).verdict;   // "OPEN"  (that path is gone)
+```
+
+**With a real verifier:** set `TYPESAFE_AI_TOKEN` and run `node examples/verify-files.mjs`. It asks Jev about a config file and caches the answer. Changing an *unrelated* file keeps the proof; changing the file the question *reads* retires it. Without a token it runs against a stand-in verifier, so you can still see the flow.
+
+---
+
+## Core concepts
+
+| Concept | What it is |
 |---|---|
-| `evaluation_mode` | `BINARY`: one proof ≥ threshold. `COORDINATED`: `required_independent_proofs` independent proofs ≥ threshold |
-| `confidence_threshold` | default 0.85 (0 is honoured) |
-| `max_proof_age_ms` | proofs older than this stop counting (deterministic given `now`) |
-| `allowed_sources` | only these `source_type`s may close the gate |
-| `block_on_conflict` | default `true`: a confident "no" alongside enough "yes" paths blocks GO |
-| `source_thresholds` | per-`source_type` bar, e.g. `{"SMALL_MODEL": 0.99}` for a source whose 0.9 isn't worth 0.9 |
+| **Question** | A node with `question_spec`: `evaluation_mode` (`BINARY` = one proof; `COORDINATED` = *k* independent proofs) and `confidence_threshold` (default 0.85). |
+| **Proof** | `{source_type, provider?, confidence, cost_weight, evidence?}`. `confidence` is P(the question is true) according to that verifier. |
+| **Path / independence** | Proofs sharing an *independence key* (`independence_key`, otherwise `source_type:provider`, otherwise `source_type`) are one path. A path's **latest** reading counts, not its best, so re-asking a verifier can't cherry-pick a pass. |
+| **Verdict** | `GO`: enough paths ≥ threshold. `OPEN`: not enough evidence. `REFUTED`: a path says ≤ 1 − threshold. `CONFLICT`: both at once, which blocks GO by default. |
+| **Margin / fragile** | How far the deciding reading sits from its bar. `fragile: true` when the margin is inside the verifier's noise (`fragility_band`, default 0.02, or a measured spread). Fragile verdicts are the ones a re-ask can flip. |
+| **Invalidation** | Kill a path when its evidence changes. The proof stays on record for audit, and the gate re-evaluates on what remains. |
+| **Evidence channels** | `question_spec.reads: ["redis.conf"]` scopes a question to specific files. Verifiers see only those files and proofs record per-file hashes, so changing a file retires exactly the proofs that read it. |
+| **Lattice** | The graph of questions and observations: serialisable JSON (`jev-lattice/v0.3`), portable between all four runtimes. |
 
-**Independence.** Proofs that share an independence key form one path: `independence_key` if set, otherwise `source_type:provider`, otherwise `source_type`. A path's current reading is its **latest** live proof, not its best, so re-asking a non-deterministic verifier can't cherry-pick a pass. Adding the same parser twice can't fake a COORDINATED gate.
+The full, normative rules are in [docs/GATE-SEMANTICS.md](docs/GATE-SEMANTICS.md). Read them if you are reimplementing the gate in another language.
 
-**Verdicts.**
-- `GO`: enough independent paths are at or above the threshold.
-- `OPEN`: not enough evidence yet.
-- `REFUTED`: some path is at or below 1 − threshold.
-- `CONFLICT`: both of the above at once.
+**Optional spec fields:**
 
-**Invalidation.** `invalidateProof(nodeId, proofId, reason)` kills one path, for example when its config changed. The gate re-evaluates on the paths that remain, and the dead proof stays on record for audit.
-
-A QUESTION without a spec gets a BINARY gate. It is never an implicit GO.
-
-## Tools
-
-The core tools are available everywhere: `window.JEV.call`, `createToolRegistry`, MCP stdio, and MCP-over-HTTP.
-
-| MCP tool | Role |
+| field | effect |
 |---|---|
-| `jev_ingest` | Observation or QUESTION (+ `question_spec`, initial `proof`) |
-| `jev_add_proof` / `jev_invalidate_proof` | Add or kill a verification path |
-| `jev_invalidate_stale` | Drift: retire proofs whose recorded evidence hash (per `channel`) no longer matches |
-| `jev_evaluate_go_no_go` | Deterministic gate + verdict |
-| `jev_query` | Spatial + probabilistic beam, prefers closed / cheap paths |
-| `jev_consolidate` | Idle cycle: stitch, merge, prune, tag `seeking_verification` |
-| `jev_rollup` | Children all GO → parent gets a `LATTICE_READ` proof (no model call) |
-| `jev_stats`, `jev_list_nodes`, `jev_get_node`, `jev_boost`, `jev_prune` | Housekeeping |
-| `jev_export_state` / `jev_import_state` | Portable snapshot |
-| `jev_capacity` | Harness probe (stdio server only) |
+| `max_proof_age_ms` | Proofs older than this stop counting. |
+| `allowed_sources` | Only these `source_type`s may count. |
+| `blocked_sources` | These `source_type`s may never count. |
+| `source_thresholds` | Per-source bar, e.g. `{"SMALL_MODEL": 0.99}`. |
+| `block_on_conflict` | Default `true`. |
+| `reads` | Evidence files the question depends on. |
+| `fragility_band` | Minimum margin for a verdict to count as firm. |
 
-These provider tools appear only when their provider is configured:
+---
 
-| MCP tool | Provider |
-|---|---|
-| `jev_verify` | Jev Noul on one question; `state` defaults to the lattice neighbourhood |
-| `jev_verify_open` | **Speculative fan-out**: every open gate in one Jev request |
-| `jev_minimax_proof` | MiniMax CoT judgement |
-| `jev_decompose` | MiniMax → atomic BINARY child questions |
-| `jev_compile` | Jev first → MiniMax → decompose + fan-out → roll-up; stops when decided (`stopOn`) |
-| `jev_edge_proof` | Workers AI small model (Worker only) |
-| `jev_predicate_register` / `jev_predicate_proof` | Compiled predicates in sandboxed Dynamic Worker isolates (Worker only). A compiled YES is a 0.8 hint, a NO is 0.01 |
+## How-to guides
 
-## Deployment surfaces
+### Gate a deploy on config files (library, e.g. in CI)
+```js
+import fs from "node:fs";
+import { JEVLattice } from "./jev-core.js";
+import { createJev } from "./providers/jev.mjs";
+import { cachedJev, createProofCache } from "./proof-cache.mjs";
+import { verifyFiles, invalidateChangedFiles } from "./orchestrator.mjs";
 
-| Surface | Where | Notes |
+const jev = cachedJev(createJev(), createProofCache());     // TYPESAFE_AI_TOKEN in env
+const lattice = new JEVLattice();
+for (const [file, q] of [["redis.conf", "Is TLS enabled (a tls-port is configured)?"], ["app.env", "Is DEBUG disabled?"]]) {
+  lattice.ingest({ text: q, question_spec: { confidence_threshold: 0.9, reads: [file] } });
+}
+const files = Object.fromEntries(["redis.conf", "app.env"].map(f => [f, fs.readFileSync(f, "utf8")]));
+await invalidateChangedFiles(lattice, { files });           // drift: retire proofs whose files changed
+await verifyFiles(lattice, { jev, files });                 // ask only the open gates, one call per read-set
+const gates = lattice.listNodes().filter(n => n.node_type === "QUESTION").map(n => lattice.evaluateGoNoGo(n.id));
+if (gates.some(g => g.fragile)) console.warn("some verdicts are within the verifier's noise; consider a second path");
+process.exit(gates.every(g => g.go) ? 0 : 1);
+```
+Persist `lattice.exportState()` between runs (as an artifact or a cache) to keep the history of proofs, then `importState` it at the start of the next run.
+
+### Give an agent the lattice (MCP over stdio)
+Add this to your MCP client config (Claude Code, Cursor, or any MCP host):
+```json
+{
+  "mcpServers": {
+    "jev-lattice": {
+      "command": "node",
+      "args": ["/abs/path/jev-lattice/mcp-server.mjs"],
+      "env": { "JEV_STATE_PATH": "/abs/path/state.json", "TYPESAFE_AI_TOKEN": "…", "MINIMAX_TOKEN": "…" }
+    }
+  }
+}
+```
+The agent gets `jev_ingest`, `jev_verify_files`, `jev_evaluate_go_no_go` and the rest of the tools. Tools for providers you haven't configured are hidden. Recipes and pitfalls are in [docs/guides/agent-integrators.md](docs/guides/agent-integrators.md).
+
+### Run it on Cloudflare (MCP over HTTP + Durable Objects)
+```bash
+export CLOUDFLARE_API_TOKEN=… CLOUDFLARE_ACCOUNT_ID=…
+npm run deploy
+printf %s "$JEV_API_KEY"       | npx wrangler secret put JEV_API_KEY        # required: bearer auth
+printf %s "$TYPESAFE_AI_TOKEN" | npx wrangler secret put TYPESAFE_AI_TOKEN
+printf %s "$MINIMAX_TOKEN"     | npx wrangler secret put MINIMAX_TOKEN
+node scripts/smoke-worker.mjs https://jev-lattice.<you>.workers.dev "$JEV_API_KEY" --live
+```
+Each lattice name gets its own Durable Object, reachable at `POST /mcp/<name>` and `/api/<name>/…`. The deployment includes:
+- the proof cache;
+- the drift detector (`PUT /api/<name>/auto-verify`);
+- sandboxed compiled predicates (Dynamic Workers);
+- cross-sense teaching (Workers AI);
+- the browser UI at `/browser/`.
+
+Operations guide: [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md).
+
+### Watch a config and re-verify on change
+```bash
+curl -X PUT https://…/api/prod-redis/auto-verify -H "authorization: Bearer $JEV_API_KEY" \
+     -H "content-type: application/json" --data @state.json
+```
+The Durable Object hashes the state, retires proofs built on older content, and re-verifies only the gates that reopened. Reverting to a previous state is served entirely from the cache.
+
+### Use cheaper verifiers safely
+- **Compiled predicates** (model-written code): use refute-only or confirm-only, depending on which direction the code is precise in. Never let code alone say GO without measuring that. See `compiled.mjs` and tiles T21 and T31.
+- **Small or overconfident models:** give them a higher bar, e.g. `source_thresholds: {"SMALL_MODEL": 0.99}`. Or let the lattice learn per-question bars from gates Jev has already decided, with `jev_teach` and `jev_apply_learned` (tiles T29 and T30).
+- **Fragile verdicts:** add an independent second path (COORDINATED), or measure the reader's noise with `stabilityProbe` (proof-cache.mjs) so the margin is judged against a real spread.
+
+---
+
+## Configuration
+
+| Variable | Used by | Meaning |
 |---|---|---|
-| Browser | `browser/` (serve the repo root; ES modules don't load from `file://`) | Push, pull, and "Verify open gates (Jev)" against an edge lattice |
-| MCP stdio | `mcp-server.mjs` | Env: `JEV_STATE_PATH`, `JEV_TIER`, `TYPESAFE_AI_TOKEN`, `MINIMAX_TOKEN`, `JEV_NO_PROVIDERS=1` |
-| Cloudflare | `worker/index.mjs`, `wrangler.jsonc` | `POST /mcp/:lattice`, `/api/:lattice/*`, UI at `/browser/`; see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md) |
+| `TYPESAFE_AI_TOKEN` | library, MCP, Worker | Jev access (enables `jev_verify*`, `jev_compile`) |
+| `MINIMAX_TOKEN` | library, MCP, Worker | MiniMax access (enables `jev_minimax_proof`, `jev_decompose`, paraphrase senses) |
+| `JEV_STATE_PATH` | MCP stdio | lattice file (default `./jev-state.json`) |
+| `JEV_TIER` | MCP stdio | `minimal` \| `standard` \| `high` (default: probed from RAM/CPU) |
+| `JEV_CACHE` / `JEV_CACHE_TTL_MS` | MCP stdio, Worker | proof cache on/off (default on) / lifetime (default 24h) |
+| `JEV_NO_PROVIDERS=1` | MCP stdio | hide provider tools (offline, tests) |
+| `JEV_API_KEY` | Worker (secret) | bearer key for `/mcp` and `/api`; access is refused when it isn't set |
+| `MINIMAX_MODEL` | Worker | default `MiniMax-M3.1-Flash-Preview` (use `MiniMax-M3` for heavy reasoning) |
+| `WORKERS_AI_MODEL` | Worker | default `@cf/meta/llama-3.1-8b-instruct-fast` |
+| `MINIMAX_TIMEOUT_MS`, `MINIMAX_MAX_TOKENS` | `providers/minimax.mjs` CLI | for long generations; `--think` selects M3 |
 
-## What the experiments found
+---
 
-Full numbers are in [docs/RESEARCH-LOG.md](docs/RESEARCH-LOG.md). Reusable patterns are in [docs/TILES.md](docs/TILES.md).
+## Testing
 
-- **Jev as gate verifier.** It got 99.0–99.7% accuracy on 600 code-labelled config questions, with **0 wrong GOs** at thresholds 0.8, 0.9 and 0.95. A batch of 300 questions came back in 0.3–0.6 s total.
-- **Reading rules belong in `state`.** Jev missed "later directive overrides earlier" traps until the rule was sent in `state`.
-- **Workers AI llama-8b** is useful as a second path but unsafe alone: 5 wrong GOs at 0.9. Pairing it COORDINATED with any other source produced 0 wrong GOs.
-- **Compiling to code.** MiniMax wrote predicates for 10 questions. 9 passed self-verification against confident Jev labels and then scored 100% on held-out configs. The 10th was correctly *rejected* for having too few confident labels.
-- **MiniMax as a code reviewer** reported 7 "bugs"; 1.5 were real. Treat its findings as claims to verify, not as fixes.
-- **Compiled code can say no, not yes.** In "refute-only" mode, compiled predicates gave 0 wrong GOs at half the Jev cost. Trusted to say yes, they produced 5–24 wrong GOs after a format shift.
-- **Ask about the field, derive the yes/no answers.** One Choice/Score per field, turned into yes/no proofs by probability mass, cut ECE from 0.033 to 0.0004 with half the questions.
-- **A MiniMax agent driving the lattice through MCP** made 16/16 correct deploy decisions and reported the lattice's verdicts verbatim (64/64), even under pressure to say GO.
-- **Jev is not bit-deterministic.** 7% of gates flip GO↔OPEN at 0.9 when re-asked. The **proof cache** (`proof-cache.mjs`) makes same-evidence-same-verdict hold, with 0 flips, and sends 66–73% fewer Jev questions on a multi-turn agent workload.
+| Command | What it covers | Needs |
+|---|---|---|
+| `npm test` | gate, regressions, orchestrator, proof cache, compiled predicates, calibration, senses, MCP stdio end-to-end, README examples | nothing |
+| `npm run test:browser` | browser UI end-to-end (Playwright) | Chromium |
+| `node scripts/smoke-worker.mjs <url> <key> [--live]` | a deployed Worker, end to end | deployed Worker |
+| `npm run live:*` | experiments with real providers ([docs/guides/researchers.md](docs/guides/researchers.md)) | tokens |
+
+CI (`.github/workflows/ci.yml`) runs the tests on Node 20 and 22, the browser end-to-end test, and a Worker bundle check.
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause / fix |
+|---|---|
+| A question is GO with no proofs | It's an OBSERVATION. Pass `question_spec` or `node_type: "QUESTION"`; questions are never implicitly GO. |
+| Adding the same proof twice doesn't satisfy COORDINATED | By design: the same independence key is one path. Use a different `provider` only for truly independent paths. |
+| A re-asked gate changed verdict | Jev isn't bit-deterministic, and readings within about 0.02 of the threshold can flip. Wrap Jev in `cachedJev`, and look at `fragile`. |
+| Many verdicts are `fragile` | The threshold sits in a dense part of the verifier's score distribution (e.g. 0.95 for Jev). Move it into a gap (0.9) or add a second path. |
+| A gate stays OPEN on counting or paraphrase questions | Jev abstains rather than err. Slice the state and count (T33), or ask a Choice (T24, T32). |
+| Worker returns 401 | The `JEV_API_KEY` secret is missing, or the bearer header is wrong. |
+| `jev_edge_proof` fails locally | The Workers AI binding only runs remotely; use a deployed Worker. |
+| MiniMax returns empty text | Reasoning used the whole token budget. Raise `MINIMAX_MAX_TOKENS`, and specify algorithms rather than statistical targets in prompts (journal P16). |
+| The browser UI won't load from `file://` | ES modules need HTTP. Serve the repo root, or use the Worker's `/browser/`. |
+
+---
+
+## Documentation map (by role)
+
+| You are… | Start here |
+|---|---|
+| **An engineer adding gates to a pipeline** | this README → [docs/GATE-SEMANTICS.md](docs/GATE-SEMANTICS.md) |
+| **Building agents or MCP integrations** | [docs/guides/agent-integrators.md](docs/guides/agent-integrators.md) · [docs/MCP.md](docs/MCP.md) |
+| **A JS developer embedding the library** | [docs/guides/library-api.md](docs/guides/library-api.md) |
+| **A platform engineer running the Cloudflare deployment** | [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md) |
+| **A researcher running or adding experiments** | [docs/guides/researchers.md](docs/guides/researchers.md) · [docs/RESEARCH-LOG.md](docs/RESEARCH-LOG.md) |
+| **Contributing to the core** | [CONTRIBUTING.md](CONTRIBUTING.md) · [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| **Designing the next tool** (patterns and process) | [docs/TILES.md](docs/TILES.md) · [docs/JOURNAL.md](docs/JOURNAL.md) |
+
+Full index: [docs/README.md](docs/README.md).
+
+---
+
+## What we've measured
+
+Selected results. Every number has a script in `experiments/` and raw output in `experiments/results/`.
+
+- **Jev as a gate verifier:** 99–99.7% accurate on 600 config questions labelled by code, with **0 wrong GOs**, at about 1 ms per question when batched.
+- **Re-ask flips are a near-threshold effect:** 50% flip rate within 0.02 of a 0.9 bar, 7% at 0.02–0.05, 0% beyond. The `fragile` flag caught **every** flip among decided gates.
+- **Proof cache:** 66–73% fewer verifier calls, and 0 verdict flips on unchanged evidence (vs 10–47 without it).
+- **Per-file evidence:** 72% fewer questions **and** higher accuracy (1.000 vs 0.951).
+- **Cross-sense teaching on the edge:** thresholds learned from Jev-decided gates matched truth-learned ones on 29/29 question × sense pairs. With an earned-discount floor, the weaker senses gave 0 wrong GOs.
+- **Compiled code:** trusted alone, it produced 5–24 wrong GOs under format drift. In the right trust direction it gave 0 wrong GOs at half the Jev cost.
+- **Long states** (300-resource Terraform plans): slicing the state and lifting verdicts reached 0.976 correct, vs 0.53 when multiplying probabilities. Convolving count distributions was perfect.
+- **Agents:** a MiniMax agent driving the lattice made 16/16 correct deploy decisions and relayed the verdicts verbatim. An *uninstructed* agent also chose the lattice (8/8), but over-explored the tools.
+
+---
 
 ## Layout
-
 ```
-jev-core.js            lattice + gate (no deps; browser, Node, Workers)
-orchestrator.mjs       providers → proofs; fan-out, decompose, roll-up, compile loop, drift invalidation
-proof-cache.mjs        content-addressed verifier answers (memory / Durable Object storage)
-compiled.mjs           compiled predicates: teacher-graded compile, compiled-first scheduler, quarantine, heal
-calibration.mjs        isotonic maps + reliability metrics (analysis; gates use source_thresholds)
-mcp-core.mjs           transport-agnostic MCP tool defs + JSON-RPC dispatch
-mcp-server.mjs         stdio transport + capacity harness + file persistence
-harness.mjs            capacity probe → minimal / standard / high policy
+jev-core.js            gate + lattice (no dependencies; browser, Node, Workers)
+orchestrator.mjs       verifiers → proofs: verify, fan-out, per-file, decompose, roll-up, compile, drift
+proof-cache.mjs        content-addressed answers (memory / Durable Object storage) + stability probe
+compiled.mjs           model-written predicates: compile, validate, schedule, quarantine, heal
+senses.mjs             cross-sense teaching: label bank, learned thresholds
+calibration.mjs        isotonic maps + reliability metrics (analysis)
+mcp-core.mjs           MCP tool definitions + JSON-RPC dispatch (transport-agnostic)
+mcp-server.mjs         stdio MCP server
+harness.mjs            capacity probe → policy tier
 providers/             jev.mjs (TypeSafe) · minimax.mjs (+ CLI) · workers-ai.mjs
-worker/index.mjs       Worker + LatticeDO (Durable Object, alarms, drift detector)
-worker/predicates.mjs  sandboxed predicates via Worker Loader (Dynamic Workers)
+worker/                Cloudflare Worker + LatticeDO + sandboxed predicates
 browser/               canvas UI + edge sync
-experiments/           live-compile · calibration · calibrate-sources · compile-parser · compiled-first
-                       proof-cache · decompose-vs-direct · choice-score-gates · minimax-agent · redis-gen
-tests/                 node:test suites + e2e/browser.e2e.mjs (Playwright)
-docs/                  ARCHITECTURE · MCP · CLOUDFLARE · TILES · RESEARCH-LOG
+examples/              runnable examples (tested)
+experiments/           benches, generators, results
+tests/                 node:test suites + Playwright e2e
+docs/                  guides, semantics, architecture, research log, journal
 ```
-
-## Design rules
-
-1. **Go/no-go is deterministic.** Providers only append proofs.
-2. **Independent proofs compound; duplicate paths don't.** One path can die without taking the conclusion with it.
-3. **Compile toward cheaper edges.** Heavy CoT is for discovery. The steady state is a parser or a lattice read.
-4. **State is the contract.** Download it, upload it, and any host can reimplement the tools.
-5. **Harness sets intensity only.** The schema is the same on a phone and a workstation.
 
 ## License
-
 MIT

@@ -31,6 +31,14 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T25 | Sandboxed predicates in Dynamic Worker isolates | `worker/predicates.mjs` | deployed |
 | T26 | Watched state = drift detector | `PUT /api/:lattice/auto-verify` | deployed |
 | T27 | Cheap agent + lattice = honest gatekeeper | `experiments/minimax-agent.mjs` | proven (live) |
+| T28 | Per-file evidence channels (`reads`) | `orchestrator.verifyFiles`, `invalidateChangedFiles` | proven |
+| T29 | Cross-sense teaching (sight calibrates smell) | `senses.mjs`, `jev_teach` / `jev_apply_learned` | proven (edge) |
+| T30 | Earned discount for learned thresholds | `learnThreshold({floor, minGoForDiscount})` | proven (edge) |
+| T31 | Learn the trust direction of code | `experiments/changelog.mjs` | proven |
+| T32 | Choice-as-matcher + Noul veto | `experiments/changelog.mjs` | proven |
+| T33 | Slice the state, lift the verdicts; convolve counts | `experiments/terraform-scale.mjs` | proven |
+| T34 | Margin + fragility on every verdict; stability probe | `evaluateGoNoGo` → `margin`, `fragile`; `stabilityProbe` | proven |
+| T35 | Put thresholds in the gaps of the verifier's score distribution | `experiments/fragility.mjs` | proven |
 
 ---
 
@@ -88,7 +96,7 @@ Tools appear only when their provider is configured: no token, no `jev_verify`. 
 MiniMax (on the max plan) is the high-volume worker: decomposition, writing predicates, review passes, brainstorming. Its output always goes through a gate (T10), a test, or human verification before it counts.
 *Evidence:* in a code review it reported 7 bugs; 1.5 were real. Operational notes:
 - MiniMax-M3 can spend its whole `max_tokens` budget on reasoning and return empty text. The CLI detects this.
-- Use `MiniMax-M2.7-highspeed` for JSON-shaped work.
+- Use `MiniMax-M3.1-Flash-Preview` (the default) for everyday JSON-shaped work and `MiniMax-M3` (`--think`) for big thinking. M2.7-highspeed also spent a whole 12k budget on reasoning for a code-generation task.
 
 ### T16: Content-addressed proof cache
 The cache key is `provider | model | hash(canonical state) | hash(question + criteria)`. Misses go to Jev in one batched call, hits cost nothing, and the stores are interchangeable (memory, or Durable Object storage). Two benefits:
@@ -129,3 +137,27 @@ PUT the current config to `/api/:lattice/auto-verify`. The Durable Object hashes
 
 ### T27: Cheap agent + lattice = honest gatekeeper
 A MiniMax agent given the MCP tool definitions, told to verify through the lattice and report verbatim, got 16/16 deploy decisions right. Its 64/64 reported verdicts matched the lattice, including under explicit pressure to say GO. The deterministic gate is what makes the agent's report checkable.
+
+### T28: Per-file evidence channels
+Questions declare `question_spec.reads`. Jev sees only those files, questions with the same read-set share a call, and proofs record per-file hashes. On a 3-file repo with drift this gave 72% fewer Jev questions **and** better accuracy (1.000 vs 0.951 decided-correct). Focused evidence is better evidence.
+
+### T29: Cross-sense teaching
+A gate decided by the strongest channel labels the weaker channels' readings on the same evidence. A per question × sense label bank (in the Durable Object) learns thresholds or blocks without ground truth; it matched truth-learned thresholds on 29/29 pairs. Spend freed question budget here (P11). **Limit:** the bank inherits the teacher's blind spots (T31).
+
+### T30: Earned discount
+A learned threshold may drop below a floor (e.g. 0.9) only with at least N clean GOs (rule of three: error ≤ ~3/N). This removed the one wrong GO an over-learned bar produced, and kept the recall gains where evidence was plentiful.
+
+### T31: Learn the trust direction of code
+A predicate can fail in either direction: Redis parsers over-claim, a "#123 appears" regex under-claims. Measure the precision of YES and of NO separately, from teacher labels, and trust only the precise direction (refute-only or confirm-only). The teacher's abstentions bias these estimates toward easy cases.
+
+### T32: Choice-as-matcher + Noul veto
+For "is X mentioned in this document?", ask a Choice over the candidate lines plus "none". Paraphrase matches went from 24/72 (Noul) to 72/72. Put the Choice and a Noul on one gate: the Choice proposes, the Noul vetoes through CONFLICT. That gave 241/245 correct and 0 wrong.
+
+### T33: Slice the state, lift the verdicts, convolve counts
+For long structured states, slice them. Combine per-slice verdicts with the quantifier (any/all), **not** by multiplying probabilities: products turn calibration slack into indecision (0.53 vs 0.976 correct at 300 resources). For counts, convolve per-slice Choice distributions: 1.00, where whole-plan counting gave 0.54–0.63.
+
+### T34: Margin and fragility on every verdict
+Every gate result carries `margin` (the deciding reading's distance from its bar) and `fragile` (margin < max(`fragility_band`, measured spread)). Re-ask flips concentrate within 0.02 of the bar: 50% there, 7% at 0.02–0.05, 0% beyond at t=0.9. The flag caught every observed flip among decided gates, while flagging only 4.7% of them at 0.9. `stabilityProbe` re-asks outside the cache and stores the spread on the cache entry, so the cache becomes a measurement rather than only a speedup. *Origin:* an independent measurement posted on PR #1 by the gitpp-side agent.
+
+### T35: Put thresholds in the gaps
+A verifier's readings cluster (Jev: about 0.95–0.99 for yes, 0.01–0.06 for no). A threshold placed inside a cluster makes many verdicts fragile: at 0.95, 42 of 160 gates were within 0.02 of the bar, against 6 at 0.9. Look at the score histogram and put the bar in a sparse region.

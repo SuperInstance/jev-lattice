@@ -1,0 +1,32 @@
+Write a single self-contained ES module (JavaScript, no dependencies) named tf-gen.mjs that generates synthetic Terraform plan JSON documents with code-computed ground truth.
+
+Exports:
+  export function makeTfGenerator(seed)   // returns genPlan(nResources) → { plan, truth }
+  export const TF_QUESTIONS               // array of [questionText, (truth) => boolean]
+
+Requirements:
+- Deterministic seeded PRNG (LCG is fine). Same seed → same sequence of plans.
+- plan follows the real `terraform show -json` shape closely enough to be realistic:
+  { format_version: "1.2", resource_changes: [ { address, type, name, change: { actions: [...], before, after } } ] }
+- Resource types: aws_instance, aws_security_group, aws_s3_bucket, aws_iam_policy, aws_db_instance.
+- actions drawn from ["no-op"], ["create"], ["update"], ["delete"], ["delete","create"] (replace), mostly no-op/update.
+- after.tags: usually includes { env: "prod"|"staging", owner: "team-x" }; sometimes missing env or owner.
+- aws_security_group after.ingress: list of { from_port, to_port, protocol, cidr_blocks }; occasionally an SSH rule (port 22) open to "0.0.0.0/0"; sometimes port 22 open only to "10.0.0.0/8" (a trap: not public); sometimes a wide range rule 0-65535 to 0.0.0.0/0 (also exposes 22).
+- aws_s3_bucket after: { acl: "private"|"public-read" }, sometimes public.
+- aws_iam_policy after.policy: a JSON string; occasionally contains Action "*" with Resource "*".
+- aws_db_instance after: { deletion_protection: true|false, storage_encrypted: true|false }.
+- Rare events should be rare: plans with N resources should have each risky property present in roughly 30-60% of plans overall, so the questions are balanced; with large N, make the probability per resource small (scale by 1/N) so that a large plan is not almost always positive.
+- truth object computed from the generated data (never from text): booleans for each question.
+
+TF_QUESTIONS (exactly these, phrased as yes/no):
+ 1 "Will any resource be destroyed (a delete action, including replacements)?"
+ 2 "Does any security group allow inbound SSH (port 22) from 0.0.0.0/0?"
+ 3 "Does every resource have both an env tag and an owner tag after the change?"
+ 4 "Is any S3 bucket public-read after the change?"
+ 5 "Does any IAM policy grant Action * on Resource *?"
+ 6 "Do all database instances have deletion_protection enabled after the change?"
+ 7 "Are there more than 3 resources being created?"
+
+Return only the code in a ```js block.
+
+Hard limits: at most 110 lines of code, no comments longer than one line, no explanation outside the code block.

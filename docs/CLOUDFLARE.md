@@ -38,7 +38,7 @@ printf %s "$MINIMAX_TOKEN"     | npx wrangler secret put MINIMAX_TOKEN       # e
 node scripts/smoke-worker.mjs https://jev-lattice.<subdomain>.workers.dev "$JEV_API_KEY" --live
 ```
 
-Optional vars: `JEV_CACHE_TTL_MS` (default 24h), `MINIMAX_MODEL` (default `MiniMax-M2.7-highspeed`) and `WORKERS_AI_MODEL` (default `@cf/meta/llama-3.1-8b-instruct-fast`).
+Optional vars: `JEV_CACHE_TTL_MS` (default 24h), `MINIMAX_MODEL` (default `MiniMax-M3.1-Flash-Preview`; `MiniMax-M3` is the big-thinking model) and `WORKERS_AI_MODEL` (default `@cf/meta/llama-3.1-8b-instruct-fast`).
 
 Local: put the secrets in `.dev.vars` (gitignored) and run `npm run dev`. The Workers AI binding only works remotely, so `jev_edge_proof` fails in local mode.
 
@@ -55,6 +55,30 @@ Local: put the secrets in `.dev.vars` (gitignored) and run `npm run dev`. The Wo
   }
 }
 ```
+
+## Durable Object storage layout
+| key prefix | contents | written by |
+|---|---|---|
+| `meta` | lattice metadata (schema, version, timestamps) | every mutation |
+| `node:<id>` | one node per key, diff-written | every mutation |
+| `cache:<provider\|model\|state_hash\|question_hash>` | Jev answers (+ `spread` after a stability probe) | `cachedJev` |
+| `pred:<question_hash>` | registered predicate code, version, hash | `jev_predicate_register` |
+| `sense:label:<question_hash>:<sense>` | (p, teacher verdict) samples, last 400 | `jev_teach` |
+| `sense:para:<question_hash>` | cached MiniMax paraphrase | the `jev-paraphrase` sense |
+| `auto_verify_state`, `last_idle_cycle` | the watched state; the last alarm's result | auto-verify, alarm |
+
+## Operations
+- **Auth:** rotate `JEV_API_KEY` with `wrangler secret put`; clients must update immediately (there is no grace period). `/health` and static assets stay public.
+- **Cost controls:**
+  - The proof cache (24h TTL) and per-file channels are the big levers.
+  - The idle cycle runs at most once per 10 minutes of quiet per lattice.
+  - Teaching costs one call per sense per decided question.
+- **Inspect a lattice:** `GET /api/<name>/stats` returns stats, the tool list, the last idle cycle and cache stats. `GET /api/<name>/state` returns the full export.
+- **Reset a lattice:** `PUT /api/<name>/state` with `{"nodes": []}`. Cache, bank and predicates stay; a new lattice name gives a clean slate.
+- **Roll back a deploy:** `npx wrangler rollback` (Durable Object state is unaffected), or redeploy a previous commit.
+- **Logs:** observability is enabled in `wrangler.jsonc`; use `npx wrangler tail` for live logs.
+- **Smoke test after every deploy:** `node scripts/smoke-worker.mjs <url> <key> --live`. It covers auth, MCP, the cache, drift, predicates, Workers AI and the idle cycle.
+- **Beta dependency:** Dynamic Workers (`worker_loaders`) is in open beta. Without the binding, the predicate tools are simply hidden.
 
 ## Why these primitives
 

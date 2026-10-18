@@ -178,6 +178,19 @@ MiniMax-M2.7-highspeed ran through its Anthropic-compatible Messages endpoint, w
 - Every run: 2 turns, 4 `jev_ingest` + 1 `jev_verify_open`.
 - Caveat: the system prompt told the agent to use the lattice. An agent choosing to do so unprompted is untested.
 
+## 2026-10-18: round 3 (v0.5)
+Full narrative, with alternatives and mistakes, in [JOURNAL.md](JOURNAL.md) §3. Numbers:
+
+| experiment | headline |
+|---|---|
+| R3-C per-file channels (`per-file-drift.mjs`) | 567 → **159** Jev questions; decided-and-correct 0.951 → **1.000** (turn 0: 0.963 → 1.000) |
+| R3-G cross-sense teaching, edge (`cross-sense.mjs`) | 360 teacher labels, 0 wrong; learned bars = truth-learned bars on **29/29** pairs; Workers AI blocked on LOG_LEVEL; with an earned-discount floor, **0 wrong GOs** in every sense, and Workers AI recall 0.824 → 0.907 |
+| R3-B CHANGELOG (`changelog.mjs`, 245 PRs) | regex: 72 wrong REFUTED; Noul: 0 wrong but 53 OPEN; Choice-as-matcher: paraphrase 24/72 → **72/72**; Choice + Noul veto: **241/245 correct, 0 wrong**; confirm-only saves 39% of Jev questions; the bank picks the trust direction correctly, but overestimates NO precision (0.75 vs truth 0.52) because the teacher abstains on the hard cases |
+| R3-A Terraform at scale (`terraform-scale.mjs`, 10→300 resources) | whole plan 0.905–0.964 with 0 wrong GO (counting 0.54–0.63 at n ≥ 100); sliced with probability product **0.53** at n=300; sliced with **verdict lifting 0.976**; convolved counts 1.00; the first confident wrong-REFUTEDs came from a port range covering 22 (fixed by spelling out the range semantics: 0.82–0.89 → 0.94–0.95) |
+| R3-F uninstructed agent (`uninstructed-agent.mjs`, edge MCP) | chose the lattice 8/8; about 13 tool calls/run vs 5 instructed; 1/8 followed the output format; **inconclusive** because the scoring depended on prose and the "unknown" truth was wrong (Redis default) |
+| Fragility (`fragility.mjs`) | flip rate within 0.02 of a 0.9 bar: 50%; 0.02–0.05: 7%; > 0.05: 0%. `fragile` caught all flips of decided gates (5/5 at 0.9, 1/1 at 0.95) |
+| MiniMax-written generator (`tf-gen.mjs` + `tf-gen-check.mjs`) | 4 prompt iterations; the working one specified the algorithm; **0/14,700** truth mismatches against an independent implementation |
+
 ## Backlog
 1. ~~Proof cache~~: done.
 2. ~~Compiled-first scheduler~~: done. Ship refute-only.
@@ -188,7 +201,15 @@ MiniMax-M2.7-highspeed ran through its Anthropic-compatible Messages endpoint, w
 7. ~~Drift detector~~: done.
 8. ~~MiniMax agent~~: done.
 
-Next:
+Next (round 4):
+- R3-D: metamorphic validation of predicates. Can MiniMax-proposed, meaning-preserving rewrites of the training inputs catch the brittle predicates that 20 configs missed?
+- R3-E: automatic Choice-first grouping of Noul questions about the same field.
+- Cross-sense teaching with a deliberately noisy teacher: how do teacher errors propagate into learned bars?
+- R3-F redesigned: score from lattice state; an "unknown" requirement with no default; a 29-tool vs 6-tool surface.
+- Fragility-aware gates: require a second path automatically when the deciding reading is fragile.
+
+Earlier "next" items:
+
 - Per-file channels in the drift detector, plus a field-level diff so only the dependent gates reopen.
 - Test whether an *uninstructed* agent chooses to use the lattice, and whether it stays honest when lattice verdicts conflict with its own belief.
 - Spot-check NO answers too, so false NOs in refute-only mode get corrected (liveness).

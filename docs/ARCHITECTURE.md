@@ -10,7 +10,10 @@ mcp-server.mjs | worker/ ← transports (stdio file-backed | HTTP + Durable Obje
         │
 mcp-core.mjs            ← tool defs + JSON-RPC dispatch (runtime-agnostic)
         │
-orchestrator.mjs        ← providers → proofs: verify, fan-out, decompose, roll-up, compile
+orchestrator.mjs        ← providers → proofs: verify, fan-out, per-file (reads), decompose, roll-up, compile, drift
+   │        proof-cache ← content-addressed answers + stability probe (spread)
+   │        compiled    ← model-written predicates (refute-/confirm-only trust)
+   │        senses      ← cross-sense teaching: decided gates label weaker channels
    │        providers/  ← jev (TypeSafe), minimax, workers-ai
         │
 harness.mjs             ← capacity probe → policy tier (Node only)
@@ -18,7 +21,17 @@ harness.mjs             ← capacity probe → policy tier (Node only)
 jev-core.js             ← question graph, proofs, go/no-go, query, consolidate
 ```
 
-Providers never decide; they append proofs. The gate in `jev-core.js` is the only place where GO is computed.
+Providers never decide; they append proofs. The gate in `jev-core.js` is the only place where GO is computed. Its exact rules, including margin and fragility, are in [GATE-SEMANTICS.md](GATE-SEMANTICS.md).
+
+## The learning loop (v0.5)
+
+```
+evidence ─▶ strongest channel (per-file Jev) ─▶ decided gate ─┐
+                                                              ├─▶ label bank (Durable Object) ─▶ learned per-question bars / blocks
+            weaker channels on the same evidence ─────────────┘        (earned-discount floor)
+            (whole-repo Jev, paraphrase, Workers AI, compiled code)
+```
+Question budget freed by caching and per-file channels is spent probing the weaker channels, so later decisions can rely on them where they have earned it. The loop is conservative by construction: a learned bar can drop below the floor only with enough clean evidence.
 
 - **MCP** owns the wire contract only.  
 - **Harness** owns intensity (when to consolidate, soft limits, preferred proof sources).  
