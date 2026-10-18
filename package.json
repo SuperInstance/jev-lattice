@@ -1,0 +1,28 @@
+{
+  "name": "jev-lattice",
+  "version": "0.2.0",
+  "description": "Spatial question graph with multi-proof verification, deterministic go/no-go, and capacity-aware MCP harness",
+  "type": "module",
+  "main": "jev-core.js",
+  "bin": {
+    "jev-mcp": "./mcp-server.mjs"
+  },
+  "scripts": {
+    "test": "node tests/core.test.mjs",
+    "mcp": "node mcp-server.mjs",
+    "example": "node examples/compile-loop.mjs"
+  },
+  "keywords": [
+    "jev",
+    "mcp",
+    "question-graph",
+    "go-no-go",
+    "multi-proof",
+    "agent-memory",
+    "superinstance"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  }
+}
