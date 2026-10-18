@@ -10,6 +10,7 @@ Request ──▶ Worker (worker/index.mjs)
 LatticeDO (SQLite-backed Durable Object, one per lattice name)
   memory:  JEVLattice + MCP dispatcher (Jev, MiniMax, Workers AI providers from env)
   storage: meta, node:<id> (diff-written), cache:<key> (Jev answers), auto_verify_state, last_idle_cycle
+  isolates: compiled predicates in Worker Loader (Dynamic Workers) isolates, no outbound network
   alarm:   10 min after last write → consolidate (+ Jev re-verify if auto-verify set) + prune expired cache
 ```
 
@@ -21,7 +22,7 @@ LatticeDO (SQLite-backed Durable Object, one per lattice name)
 | GET | `/api/:lattice/stats` | stats, tool list, last idle cycle |
 | GET / PUT | `/api/:lattice/state` | export / import lattice JSON |
 | POST | `/api/:lattice/tool/:tool` | call any MCP tool with a JSON args body |
-| PUT / DELETE | `/api/:lattice/auto-verify` | set / clear the `state` the idle cycle re-verifies against |
+| PUT / DELETE | `/api/:lattice/auto-verify` | watch a `state`: PUT invalidates proofs built on older content and re-verifies the reopened gates (cached); DELETE stops watching |
 | POST | `/api/:lattice/idle` | run the idle cycle now |
 
 All `/mcp` and `/api` routes need `Authorization: Bearer $JEV_API_KEY`. The Worker fails closed: if no key is configured, access is refused.
@@ -60,4 +61,5 @@ Local: put the secrets in `.dev.vars` (gitignored) and run `npm run dev`. The Wo
 - **Durable Objects** give each lattice exactly one writer. The gate is deterministic *and* the state it reads is consistent, with no locks needed.
 - **Alarms** are the idle/sleep phase from the architecture: consolidation and re-verification run when nobody is waiting.
 - **Workers AI** gives a cheap second, independent path that runs inside Cloudflare's network (T11 in TILES.md).
+- **Dynamic Workers** (Worker Loader) run model-written predicates in their own isolates. `eval` and `new Function` are unavailable in Workers, and `node:vm` is not a sandbox anyway.
 - **Static Assets** serve the same `jev-core.js` that the Durable Object runs, so the browser and the edge share one implementation.

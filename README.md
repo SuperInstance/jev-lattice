@@ -25,7 +25,7 @@ Same schema (`jev-lattice/v0.3`, reads v0.2) everywhere. State is portable JSON.
 
 ```bash
 npm install          # only dev dependency: wrangler
-npm test             # offline: 30 v0.2 assertions + 40 node:test cases (regressions, orchestrator, proof cache, MCP stdio e2e)
+npm test             # offline: 30 v0.2 assertions + 53 node:test cases (regressions, orchestrator, proof cache, compiled, calibration, MCP e2e)
 npm run example      # progressive compilation demo, no network
 
 # live (needs TYPESAFE_AI_TOKEN and/or MINIMAX_TOKEN)
@@ -33,6 +33,10 @@ npm run live:compile          # Jev → MiniMax → decompose → fan-out → ro
 npm run live:calibration      # verifier calibration bench vs code-computed ground truth
 npm run live:compile-parser   # MiniMax writes parsers, Jev grades them, held-out test
 npm run live:proof-cache      # multi-turn agent workload: naive vs hash-invalidation vs cache
+npm run live:compiled-first   # compiled predicates under distribution shift (add --compile-rules base)
+npm run live:decompose        # direct vs decomposed composites (AND and m-of-k)
+npm run live:choice-score     # Choice/Score-derived gates vs one Noul per proposition
+npm run live:agent            # MiniMax agent drives the lattice via MCP tools (add --pressure)
 
 npm run mcp          # MCP stdio server (state → ./jev-state.json)
 npm run dev          # Worker + Durable Object locally (secrets in .dev.vars)
@@ -48,6 +52,7 @@ npm run deploy       # Cloudflare
 | `max_proof_age_ms` | proofs older than this stop counting (deterministic given `now`) |
 | `allowed_sources` | only these `source_type`s may close the gate |
 | `block_on_conflict` | default `true`: a confident "no" alongside enough "yes" paths blocks GO |
+| `source_thresholds` | per-`source_type` bar, e.g. `{"SMALL_MODEL": 0.99}` for a source whose 0.9 isn't worth 0.9 |
 
 **Independence.** Proofs that share an independence key form one path: `independence_key` if set, otherwise `source_type:provider`, otherwise `source_type`. A path's current reading is its **latest** live proof, not its best, so re-asking a non-deterministic verifier can't cherry-pick a pass. Adding the same parser twice can't fake a COORDINATED gate.
 
@@ -88,6 +93,7 @@ These provider tools appear only when their provider is configured:
 | `jev_decompose` | MiniMax → atomic BINARY child questions |
 | `jev_compile` | Jev first → MiniMax → decompose + fan-out → roll-up; stops when decided (`stopOn`) |
 | `jev_edge_proof` | Workers AI small model (Worker only) |
+| `jev_predicate_register` / `jev_predicate_proof` | Compiled predicates in sandboxed Dynamic Worker isolates (Worker only). A compiled YES is a 0.8 hint, a NO is 0.01 |
 
 ## Deployment surfaces
 
@@ -106,6 +112,9 @@ Full numbers are in [docs/RESEARCH-LOG.md](docs/RESEARCH-LOG.md). Reusable patte
 - **Workers AI llama-8b** is useful as a second path but unsafe alone: 5 wrong GOs at 0.9. Pairing it COORDINATED with any other source produced 0 wrong GOs.
 - **Compiling to code.** MiniMax wrote predicates for 10 questions. 9 passed self-verification against confident Jev labels and then scored 100% on held-out configs. The 10th was correctly *rejected* for having too few confident labels.
 - **MiniMax as a code reviewer** reported 7 "bugs"; 1.5 were real. Treat its findings as claims to verify, not as fixes.
+- **Compiled code can say no, not yes.** In "refute-only" mode, compiled predicates gave 0 wrong GOs at half the Jev cost. Trusted to say yes, they produced 5–24 wrong GOs after a format shift.
+- **Ask about the field, derive the yes/no answers.** One Choice/Score per field, turned into yes/no proofs by probability mass, cut ECE from 0.033 to 0.0004 with half the questions.
+- **A MiniMax agent driving the lattice through MCP** made 16/16 correct deploy decisions and reported the lattice's verdicts verbatim (64/64), even under pressure to say GO.
 - **Jev is not bit-deterministic.** 7% of gates flip GO↔OPEN at 0.9 when re-asked. The **proof cache** (`proof-cache.mjs`) makes same-evidence-same-verdict hold, with 0 flips, and sends 66–73% fewer Jev questions on a multi-turn agent workload.
 
 ## Layout
@@ -114,13 +123,17 @@ Full numbers are in [docs/RESEARCH-LOG.md](docs/RESEARCH-LOG.md). Reusable patte
 jev-core.js            lattice + gate (no deps; browser, Node, Workers)
 orchestrator.mjs       providers → proofs; fan-out, decompose, roll-up, compile loop, drift invalidation
 proof-cache.mjs        content-addressed verifier answers (memory / Durable Object storage)
+compiled.mjs           compiled predicates: teacher-graded compile, compiled-first scheduler, quarantine, heal
+calibration.mjs        isotonic maps + reliability metrics (analysis; gates use source_thresholds)
 mcp-core.mjs           transport-agnostic MCP tool defs + JSON-RPC dispatch
 mcp-server.mjs         stdio transport + capacity harness + file persistence
 harness.mjs            capacity probe → minimal / standard / high policy
 providers/             jev.mjs (TypeSafe) · minimax.mjs (+ CLI) · workers-ai.mjs
-worker/index.mjs       Worker + LatticeDO (Durable Object, alarms)
+worker/index.mjs       Worker + LatticeDO (Durable Object, alarms, drift detector)
+worker/predicates.mjs  sandboxed predicates via Worker Loader (Dynamic Workers)
 browser/               canvas UI + edge sync
-experiments/           live-compile · calibration · compile-parser · proof-cache · redis-gen
+experiments/           live-compile · calibration · calibrate-sources · compile-parser · compiled-first
+                       proof-cache · decompose-vs-direct · choice-score-gates · minimax-agent · redis-gen
 tests/                 node:test suites + e2e/browser.e2e.mjs (Playwright)
 docs/                  ARCHITECTURE · MCP · CLOUDFLARE · TILES · RESEARCH-LOG
 ```

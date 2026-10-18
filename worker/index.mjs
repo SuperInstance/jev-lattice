@@ -7,6 +7,7 @@
  *   DO alarm         idle cycle: consolidate (and optionally re-verify open
  *                    gates with Jev) a while after the last write
  *   Workers AI       on-edge SMALL_MODEL proof path (jev_edge_proof)
+ *   Worker Loader    compiled predicates in sandboxed Dynamic Worker isolates (jev_predicate_*)
  *
  * Routes (lattice name defaults to "default"):
  *   POST /mcp[/:name]                 MCP Streamable HTTP (JSON responses)
@@ -25,10 +26,12 @@ import { createMcp, SERVER_INFO } from "../mcp-core.mjs";
 import { createJev } from "../providers/jev.mjs";
 import { createMiniMax, MINIMAX_FAST_MODEL } from "../providers/minimax.mjs";
 import { createWorkersAI } from "../providers/workers-ai.mjs";
-import { verifyOpenGates } from "../orchestrator.mjs";
+import { verifyOpenGates, invalidateStale } from "../orchestrator.mjs";
 import { cachedJev, createProofCache, durableObjectStore } from "../proof-cache.mjs";
+import { createEdgePredicates } from "./predicates.mjs";
 
 const IDLE_MS = 10 * 60 * 1000;
+const AUTO_CHANNEL = "auto-verify";
 const NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
 
 const json = (body, status = 200, headers = {}) =>
@@ -65,7 +68,9 @@ export class LatticeDO extends DurableObject {
     const mm = env.MINIMAX_TOKEN ? createMiniMax({ apiKey: env.MINIMAX_TOKEN, model: env.MINIMAX_MODEL || MINIMAX_FAST_MODEL }) : null;
     const small = env.AI ? createWorkersAI(env.AI, env.WORKERS_AI_MODEL ? { model: env.WORKERS_AI_MODEL } : {}) : null;
     this.jev = jev;
-    this.mcp = createMcp({ lattice: this.lattice, jev, mm, small, persist: () => this.persist() });
+    // Dynamic Workers sandbox for compiled predicates (open beta; absent binding → tools hidden)
+    const predicates = env.LOADER ? createEdgePredicates({ loader: env.LOADER, storage: ctx.storage }) : null;
+    this.mcp = createMcp({ lattice: this.lattice, jev, mm, small, predicates, persist: () => this.persist() });
   }
 
   async load() {
@@ -105,7 +110,7 @@ export class LatticeDO extends DurableObject {
     const auto = await this.ctx.storage.get("auto_verify_state");
     if (auto && this.jev && consolidate.seekingVerification > 0) {
       try {
-        verified = await verifyOpenGates(this.lattice, { jev: this.jev, state: auto });
+        verified = await verifyOpenGates(this.lattice, { jev: this.jev, state: auto, channel: AUTO_CHANNEL });
       } catch (e) {
         verified = { ok: false, error: e.message };
       }
@@ -140,10 +145,22 @@ export class LatticeDO extends DurableObject {
     return r.error ? { ok: false, error: r.error.message } : r.result.structuredContent ?? { ok: false, error: r.result.content?.[0]?.text };
   }
 
+  /**
+   * Drift detector: storing a new watched state retires proofs built on the old
+   * content (by state hash) and immediately re-verifies the gates that reopened —
+   * unchanged questions are served from the proof cache.
+   */
   async setAutoVerify(state) {
-    if (state === null) await this.ctx.storage.delete("auto_verify_state");
-    else await this.ctx.storage.put("auto_verify_state", state);
-    return { ok: true, auto_verify: state !== null };
+    if (state === null) {
+      await this.ctx.storage.delete("auto_verify_state");
+      return { ok: true, auto_verify: false };
+    }
+    await this.ctx.storage.put("auto_verify_state", state);
+    const drift = await invalidateStale(this.lattice, { state, channel: AUTO_CHANNEL, reason: "watched state changed" });
+    let verified = null;
+    if (this.jev) verified = await verifyOpenGates(this.lattice, { jev: this.jev, state, channel: AUTO_CHANNEL });
+    await this.persist();
+    return { ok: true, auto_verify: true, drift, verified };
   }
 
   async info() {

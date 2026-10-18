@@ -66,6 +66,47 @@ if (live) {
   }
 }
 
+if (tools.includes("jev_predicate_register")) {
+  const question = "Is TLS enabled (a tls-port is configured)?";
+  const labels = [
+    { text: "port 0\ntls-port 6380", expected: true },
+    { text: "TLS-PORT 6380", expected: true },
+    { text: "port 6379", expected: false },
+    { text: "# tls-port 6380\nport 6379", expected: false },
+    { text: "bind 127.0.0.1", expected: false }
+  ];
+  const bad = await call("jev_predicate_register", { question, code: "t => t.includes('tls-port')", labels });
+  check(bad.ok === false && bad.disagreements >= 1, "edge rejects a predicate that fails its labels", `disagreements=${bad.disagreements}`);
+  const evil = await call("jev_predicate_register", { question: "net?", code: "t => { fetch('https://example.com'); return true }", labels: labels.map(l => ({ ...l, expected: true })) });
+  check(evil.ok === true || evil.ok === false, "isolate tolerates code that tries the network", `ok=${evil.ok}`);
+  const good = await call("jev_predicate_register", { question, code: "t => t.split('\\n').some(l => /^\\s*tls-port\\s+\\d+/i.test(l))", labels });
+  check(good.ok === true && good.accepted, "edge accepts a correct predicate (validated inside the isolate)", `v${good.version} ${good.validate_ms}ms`);
+  const qq = await call("jev_ingest", { text: question, question_spec: { confidence_threshold: 0.85 }, linkToNearest: false });
+  const yes = await call("jev_predicate_proof", { id: qq.node.id, text: "port 0\ntls-port 6380" });
+  check(yes.ok && yes.answer === true && yes.gate.verdict === "OPEN", "compiled YES is a hint: cannot close a 0.85 gate alone", `${yes.latency_ms}ms`);
+  const qn = await call("jev_ingest", { text: question, question_spec: { confidence_threshold: 0.85 }, linkToNearest: false });
+  const no = await call("jev_predicate_proof", { id: qn.node.id, text: "port 6379" });
+  check(no.ok && no.answer === false && no.gate.verdict === "REFUTED", "compiled NO refutes", `${no.latency_ms}ms`);
+}
+
+if (live && tools.includes("jev_verify")) {
+  // drift detector: watch a config; change it; only proofs on the old content are retired
+  const watch = `${lattice}-watch`;
+  const T = (name, a) => fetch(`${base}/api/${watch}/tool/${name}`, { method: "POST", headers: H, body: JSON.stringify(a) }).then(r => r.json());
+  for (const text of ["Is TLS enabled (tls-port configured)?", "Is AOF persistence enabled?"]) {
+    await T("jev_ingest", { text, question_spec: { confidence_threshold: 0.9 }, linkToNearest: false });
+  }
+  const put = st => fetch(`${base}/api/${watch}/auto-verify`, { method: "PUT", headers: H, body: JSON.stringify(st) }).then(r => r.json());
+  const v1 = await put({ "redis.conf": "tls-port 6380\nappendonly yes" });
+  check(v1.verified?.verified === 2, "watch: first state verifies both gates", v1.verified?.results.map(r => r.verdict).join(","));
+  const v2 = await put({ "redis.conf": "tls-port 6380\nappendonly yes" });
+  check(v2.drift.invalidated === 0 && v2.verified.verified === 0, "watch: identical state → no invalidation, no Jev call");
+  const v3 = await put({ "redis.conf": "port 6379\nappendonly yes" });
+  check(v3.drift.invalidated === 2 && v3.verified.verified === 2, "watch: changed state → both re-verified", v3.verified.results.map(r => `${r.verdict}`).join(","));
+  const v4 = await put({ "redis.conf": "tls-port 6380\nappendonly yes" });
+  check(v4.verified?.cache?.hits === 2, "watch: reverting the state is served entirely from the proof cache", JSON.stringify(v4.verified?.cache));
+}
+
 const idle = await (await fetch(`${base}/api/${lattice}/idle`, { method: "POST", headers: H })).json();
 check(idle.ok && idle.consolidate?.ok, "idle cycle (alarm handler) runs");
 const info = await (await fetch(`${base}/api/${lattice}/stats`, { headers: H })).json();

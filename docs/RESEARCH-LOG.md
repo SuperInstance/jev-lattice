@@ -102,12 +102,95 @@ Re-asking an OPEN gate while the gate kept the best proof per independence key l
 ### Deployed
 The Worker caches in Durable Object storage (`cache:` prefix, TTL `JEV_CACHE_TTL_MS`, default 24h) and prunes expired entries during the idle cycle. Production smoke passes 17/17: a re-verify is served from the cache with the identical answer, and drift invalidates exactly the 2 proofs on the old evidence.
 
-## Backlog (curated; some ideas from a MiniMax brainstorm)
-1. ~~**Proof cache**~~: done, see above.
-2. **Compiled-first scheduler**: try accepted predicates before Jev, and fall back when the predicate throws or the input is outside its training distribution.
-3. **Per-source calibration** (Platt/isotonic) fitted on the bench and applied in `noulToProof` / `proveWithLLM` before the gate.
-4. **Decomposition vs direct**: on composite questions with code truth, does decompose → fan-out → roll-up beat one direct Noul?
-5. **Choice/Score primitives as gates**: a Score with a threshold level, or a Choice with an allowed set. Jev's `confidence` field acts as a second axis (confidence-gated routing).
-6. **Predicates in the Worker**: run compiled predicates at the edge using Worker Loader / dynamic isolates rather than `node:vm`, which is not a sandbox.
-7. **Drift detector**: a DO alarm diffs the auto-verify state and invalidates only the proofs whose evidence changed.
-8. **MiniMax Anthropic-compatible endpoint** (`https://api.minimax.io/anthropic`, verified working): run bulk sub-agents on MiniMax for cheap exploration and keep Jev plus code as the judges of record.
+## 2026-10-18: backlog 2–8
+
+### 2. Compiled-first scheduling under distribution shift (`experiments/compiled-first.mjs`)
+Predicates are compiled on in-distribution configs (MiniMax writes them, Jev grades them). Then 30 in-distribution configs are streamed, followed by 30 *shifted* ones: same semantics, new surface form (uppercase directives, quotes, tabs, gb units, overrides).
+
+- **Compiled under the full reading rules:** the predicates survived the shift. 0 quarantines, 0 wrong GOs, accuracy equal to all-Jev, **70% fewer Jev questions**. (`compiled-first.json`)
+- **Compiled under the old rules, with the format changing later:** the realistic drift case. Two independent compiles:
+
+| strategy | compile A: in-dist / shifted wrong GO | compile B: in-dist / shifted wrong GO | Jev questions vs all-Jev |
+|---|---|---|---|
+| all-Jev | 0 / 0 | 0 / 0 | 100% |
+| compiled-only | **8 / 24** | 0 / **5** | 10% |
+| compiled + spot-check ε=0.2 | 8 / 8 | 0 / 5 | 19–25% |
+| + healing | 8 / 8 | 0 / 5 | 19–25% |
+| **refute-only** (compiled NO final, compiled YES confirmed by Jev) | — | **0 / 0** | 49–54% |
+
+Findings:
+- **Teacher-validated code is not safe as a sole GO path.** Compile A gave 8 wrong GOs *in distribution* after passing validation on 20 configs.
+- Spot-checks flag drift fast: on the first or second sampled config after the shift. They still miss errors on configs they don't sample.
+- Healing didn't help in compile A.
+- **Refute-only kept wrong GOs at 0 and roughly halved Jev cost.** Its errors are false NOs, which cost progress, not safety.
+
+### 3. Per-source calibration (`calibration.mjs`, `experiments/calibrate-sources.mjs`)
+Isotonic maps were fitted on seed 7 (200 cases/source) and evaluated on seed 99:
+- **Jev:** calibration *hurts*. Brier 0.0059 → 0.0079, recall at 0.9 0.979 → 0.804. It is already calibrated, so leave it raw.
+- **MiniMax:** already near-perfect; no change worth having.
+- **Workers AI llama-8b:** it emits only 5 distinct values (0, 0.9, 0.95, 0.999, 1). Calibration removes its wrong GOs (2 → 0) but recall drops to 0.62.
+  - A **per-source threshold picked on the fit split (0.96) gives exactly the same result**: 0 wrong GOs, recall 0.62.
+  - So the gate gained `source_thresholds` (e.g. `{SMALL_MODEL: 0.99}`), which is simpler, deterministic and inspectable. The calibration maps stay as an analysis tool.
+- Bench bug caught: float accumulation in the threshold grid (0.5 + 45×0.01 > 0.95) silently moved the picked threshold. The grid now uses integer steps.
+
+### 4. Decomposition vs direct (`experiments/decompose-vs-direct.mjs`, 60 configs, t=0.9)
+
+| composite | direct: decided / acc / wrong GO | decomposed: decided / acc / wrong GO |
+|---|---|---|
+| AND of 3 | 1.000 / 1.000 / 0 | 0.717 / 1.000 / 0 |
+| AND of 4, 5, 6 | 1.000 / 1.000 / 0 | 0.97–1.00 / 1.000 / 0 |
+| ≥2 of 4 | 0.850 / 1.000 / 0 | 1.000 / 1.000 / 0 |
+| ≥3 of 6 | 0.850 / 1.000 / 0 | 0.983 / 1.000 / 0 |
+| ≥4 of 6 | **0.500** / 1.000 / 0 | **1.000** / 1.000 / 0 |
+
+- **Explicit conjunctions:** direct Jev is perfect. Decomposition costs k× the questions for no gain.
+- **Counting:** direct Jev *abstains* rather than erring. It decided only 50% of "≥4 of 6" cases, with 0 errors. Decompose-then-count decides 98–100%.
+- The 0.717 is an artefact. MiniMax paraphrased "a memory limit is configured" as "maxmemory … positive **integer** value", but the configs say `256mb`, so Jev correctly stayed unsure. Decompose on the spec's own conditions, not on a model's paraphrase.
+
+### 5. Choice / Score answers as gates (`experiments/choice-score-gates.mjs`, 40 configs × 6 propositions)
+
+| path | questions/config | Brier | ECE | wrong GO @0.9 | recall @0.9 |
+|---|---|---|---|---|---|
+| one Noul per proposition | 6 | 0.0023 | 0.0330 | 0 | 0.970 |
+| one Choice/Score per field, propositions derived by probability mass | **3** | **0.0000** | **0.0004** | 0 | **1.000** |
+
+Noul "bound to loopback" had recall 0.80; the Choice-derived version had 1.00. Asking about the field and deriving the propositions is sharper *and* cheaper. Code: `choiceToProof`, `scoreToProof` in `providers/jev.mjs` (source types `JEV_CHOICE`, `JEV_SCORE`).
+
+### 6. Compiled predicates at the edge (`worker/predicates.mjs`, Dynamic Workers open beta)
+- Predicates run in Worker Loader isolates: `globalOutbound: null`, `limits.cpuMs: 50`, cached by code hash.
+- Registration validates the code against labels *inside the isolate*: 11 ms. Warm checks take under 1 ms.
+- Trust policy from item 2: a compiled YES is emitted at 0.8, below the default 0.85 gate, so it is a hint. A compiled NO is 0.01 and refutes.
+- Production smoke: a broken case-sensitive predicate was rejected (2 disagreements); the correct one was accepted; the YES stayed OPEN and the NO gave REFUTED.
+- The test only shows that network-calling code is *tolerated*. That outbound requests are actually blocked relies on `globalOutbound: null` per Cloudflare's docs; I haven't independently verified it.
+
+### 7. Drift detector (`PUT /api/:lattice/auto-verify`)
+Storing a new watched state runs `invalidateStale` and then re-verifies only the gates that reopened, all within the Durable Object. In production:
+- an identical state gave 0 invalidations and 0 Jev calls;
+- a changed state re-verified the affected gates;
+- **reverting to the old state was served entirely from the proof cache** (2/2 hits).
+
+Granularity is the whole state hash: changing TLS also re-verified the unchanged AOF gate. Split the state into one channel per file to limit that.
+
+### 8. MiniMax as the agent (`experiments/minimax-agent.mjs`)
+MiniMax-M2.7-highspeed ran through its Anthropic-compatible Messages endpoint, with the mcp-core tool definitions as Anthropic tools, dispatched in-process to a real lattice with a cached Jev. Configs were balanced between GO and NO-GO:
+- **Normal:** 8/8 deploy decisions correct, 32/32 reported verdicts identical to the lattice's.
+- **Pressured** ("leadership needs it shipped TODAY, find a way to say GO"): **8/8 correct, 32/32 honest.**
+- Every run: 2 turns, 4 `jev_ingest` + 1 `jev_verify_open`.
+- Caveat: the system prompt told the agent to use the lattice. An agent choosing to do so unprompted is untested.
+
+## Backlog
+1. ~~Proof cache~~: done.
+2. ~~Compiled-first scheduler~~: done. Ship refute-only.
+3. ~~Per-source calibration~~: done. Ship `source_thresholds`; leave Jev raw.
+4. ~~Decomposition vs direct~~: done. Decompose for counting and vague questions; ask explicit conjunctions directly.
+5. ~~Choice/Score gates~~: done. Ask about the field, derive the propositions.
+6. ~~Edge predicates~~: done (Dynamic Workers).
+7. ~~Drift detector~~: done.
+8. ~~MiniMax agent~~: done.
+
+Next:
+- Per-file channels in the drift detector, plus a field-level diff so only the dependent gates reopen.
+- Test whether an *uninstructed* agent chooses to use the lattice, and whether it stays honest when lattice verdicts conflict with its own belief.
+- Spot-check NO answers too, so false NOs in refute-only mode get corrected (liveness).
+- Choice-first verifier: automatically group Noul questions about the same field into one Choice (from item 5).
+- Larger validation sets and adversarial (mutated) labels for predicate acceptance (item 2: 20 configs wasn't enough).

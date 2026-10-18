@@ -272,9 +272,11 @@ export class JEVLattice {
     // recently appended live proof — not the best one. Keeping the max would let a
     // caller re-ask a non-deterministic verifier until it passes (cherry-picking).
     const paths = currentPaths(live);
-    const valid = paths.filter(p => p.confidence >= threshold);
+    // Per-source bar: e.g. { SMALL_MODEL: 0.99 } for a source whose 0.9 isn't worth 0.9
+    const bar = p => spec.source_thresholds?.[p.source_type] ?? threshold;
+    const valid = paths.filter(p => p.confidence >= bar(p));
     // Refutation: a path's current reading confidently says "no" (confidence ≤ 1 − threshold)
-    const refuting = new Set(paths.filter(p => p.confidence <= 1 - threshold).map(independenceKey));
+    const refuting = new Set(paths.filter(p => p.confidence <= 1 - bar(p)).map(independenceKey));
     const satisfied = valid.length >= required;
     const conflict = satisfied && refuting.size > 0;
     const go = satisfied && !(conflict && spec.block_on_conflict);
@@ -730,8 +732,20 @@ function normalizeQuestionSpec(spec) {
       ? spec.allowed_sources.map(String)
       : null,
     // A confident "no" alongside enough "yes" paths blocks GO unless disabled
-    block_on_conflict: spec.block_on_conflict !== false
+    block_on_conflict: spec.block_on_conflict !== false,
+    // Optional: per-source_type thresholds overriding confidence_threshold
+    source_thresholds: normalizeSourceThresholds(spec.source_thresholds)
   };
+}
+
+function normalizeSourceThresholds(t) {
+  if (!t || typeof t !== "object" || Array.isArray(t)) return null;
+  const out = {};
+  for (const [k, v] of Object.entries(t)) {
+    const n = num(v, null);
+    if (n !== null) out[String(k)] = clamp(n, 0, 1);
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 function normalizeProof(p) {

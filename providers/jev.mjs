@@ -143,6 +143,31 @@ export function noulToProof(
   };
 }
 
+/**
+ * Choice → yes/no proof: P(answer ∈ allowed) = Σ probabilities of the allowed options.
+ * One Choice question can back several gates ("is it loopback?", "is it public?").
+ */
+export function choiceToProof(answer, allowed, { model, note = null, state_hash = null, channel = null } = {}) {
+  const probs = answer.probabilities || {};
+  const p = Math.min(1, allowed.reduce((s, k) => s + (Number(probs[k]) || 0), 0));
+  return {
+    ...noulToProof({ p, model }, { note, state_hash, channel }),
+    source_type: "JEV_CHOICE",
+    evidence: { ...(state_hash ? { state_hash } : {}), ...(channel ? { channel } : {}), allowed, choice: answer.choice, choice_confidence: answer.confidence }
+  };
+}
+
+/** Score → yes/no proof: P(level ≥ minLevel) = Σ probabilities of levels at or above it. */
+export function scoreToProof(answer, minLevel, { model, note = null, state_hash = null, channel = null } = {}) {
+  const probs = answer.probabilities || {};
+  const p = Math.min(1, Object.entries(probs).filter(([lvl]) => Number(lvl) >= minLevel).reduce((s, [, v]) => s + (Number(v) || 0), 0));
+  return {
+    ...noulToProof({ p, model }, { note, state_hash, channel }),
+    source_type: "JEV_SCORE",
+    evidence: { ...(state_hash ? { state_hash } : {}), ...(channel ? { channel } : {}), minLevel, score: answer.score, score_confidence: answer.confidence }
+  };
+}
+
 // ---------- CLI ----------
 const isMain = globalThis.process?.argv?.[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (isMain) {

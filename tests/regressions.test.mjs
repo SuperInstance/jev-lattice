@@ -221,3 +221,23 @@ test("a path that recovers from a refutation is no longer refuting", () => {
   L.addProof(node.id, { source_type: "SENSOR", confidence: 0.97 });
   assert.equal(L.evaluateGoNoGo(node.id).verdict, "GO", "sensor re-read supersedes, no CONFLICT with itself");
 });
+
+test("source_thresholds raise the bar for an overconfident source only", () => {
+  const L = new JEVLattice();
+  const { node } = L.ingest({
+    text: "Q",
+    question_spec: { confidence_threshold: 0.9, source_thresholds: { SMALL_MODEL: 0.99, junk: "x" } },
+    proof: { source_type: "SMALL_MODEL", provider: "workers-ai", confidence: 0.95 }
+  });
+  assert.deepEqual(node.question_spec.source_thresholds, { SMALL_MODEL: 0.99 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "OPEN", "0.95 from a small model is not enough");
+  L.addProof(node.id, { source_type: "JEV_NOUL", provider: "typesafe", confidence: 0.95 });
+  assert.equal(L.evaluateGoNoGo(node.id).verdict, "GO", "0.95 from Jev is");
+  // refutation uses the same per-source bar: 0.03 > 1 − 0.99 → not a confident "no"
+  const { node: n2 } = L.ingest({
+    text: "Q2",
+    question_spec: { confidence_threshold: 0.9, source_thresholds: { SMALL_MODEL: 0.99 } },
+    proof: { source_type: "SMALL_MODEL", confidence: 0.03 }
+  });
+  assert.equal(L.evaluateGoNoGo(n2.id).verdict, "OPEN");
+});

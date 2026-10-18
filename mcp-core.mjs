@@ -7,7 +7,7 @@
 import { createToolRegistry, SCHEMA } from "./jev-core.js";
 import * as orch from "./orchestrator.mjs";
 
-export const SERVER_INFO = { name: "jev-lattice", version: "0.3.1" };
+export const SERVER_INFO = { name: "jev-lattice", version: "0.4.0" };
 export const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const PROOF_SCHEMA = {
@@ -35,7 +35,8 @@ const SPEC_SCHEMA = {
     intent: { type: "string" },
     max_proof_age_ms: { type: "number" },
     allowed_sources: { type: "array", items: { type: "string" } },
-    block_on_conflict: { type: "boolean" }
+    block_on_conflict: { type: "boolean" },
+    source_thresholds: { type: "object", additionalProperties: { type: "number" }, description: "Per source_type thresholds, e.g. {\"SMALL_MODEL\": 0.99}" }
   }
 };
 
@@ -50,10 +51,10 @@ const STATE_ARG = {
 const MUTATING = new Set([
   "jev_ingest", "jev_add_proof", "jev_invalidate_proof", "jev_consolidate", "jev_import_state",
   "jev_boost", "jev_prune", "jev_verify", "jev_verify_open", "jev_minimax_proof", "jev_decompose",
-  "jev_rollup", "jev_compile", "jev_edge_proof", "jev_invalidate_stale"
+  "jev_rollup", "jev_compile", "jev_edge_proof", "jev_invalidate_stale", "jev_predicate_proof"
 ]);
 
-export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false } = {}) {
+export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = false, hasSmall = false, hasPredicates = false } = {}) {
   const defs = [
     { name: "jev_ingest", description: "Ingest text as OBSERVATION or QUESTION. For questions pass question_spec (BINARY|COORDINATED) and optional initial proof.",
       inputSchema: { type: "object", properties: {
@@ -104,6 +105,17 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
     defs.push({ name: "jev_edge_proof", description: "Independent SMALL_MODEL proof from an on-edge model (Cloudflare Workers AI).",
       inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG }, required: ["id"] } });
   }
+  if (hasPredicates) {
+    defs.push(
+      { name: "jev_predicate_register", description: "Register model-written code `(text) => boolean` for a question. Runs in a sandboxed isolate; accepted only if it matches every label.",
+        inputSchema: { type: "object", properties: {
+          question: { type: "string" }, code: { type: "string" },
+          labels: { type: "array", items: { type: "object", properties: { text: { type: "string" }, expected: { type: "boolean" } }, required: ["text", "expected"] } }
+        }, required: ["question", "code", "labels"] } },
+      { name: "jev_predicate_proof", description: "Run a QUESTION's compiled predicate on `text` (sandboxed) and append a DETERMINISTIC_PARSER proof. A compiled YES is 0.8 (a hint), a NO is 0.01.",
+        inputSchema: { type: "object", properties: { id: { type: "string" }, text: { type: "string" }, question: { type: "string" }, channel: CHANNEL_ARG }, required: ["id", "text"] } }
+    );
+  }
   if (hasJev || hasMiniMax) {
     defs.push({ name: "jev_compile", description: "Progressive compilation for one question: Jev first → MiniMax CoT → decompose + Jev fan-out → roll-up. Stops when decided.",
       inputSchema: { type: "object", properties: { id: { type: "string" }, state: STATE_ARG }, required: ["id"] } });
@@ -117,13 +129,14 @@ export function toolDefs({ hasJev = false, hasMiniMax = false, hasCapacity = fal
  * @param {object} [o.jev]  providers/jev.mjs client
  * @param {object} [o.mm]   providers/minimax.mjs client
  * @param {object} [o.small] small/edge model client with json() (Workers AI)
+ * @param {object} [o.predicates] sandboxed compiled-predicate store (worker/predicates.mjs)
  * @param {() => object} [o.capacity]  harness snapshot fn (Node only)
  * @param {() => object} [o.consolidateOpts]
  * @param {() => Promise<void>|void} [o.persist] called after mutating tools
  */
-export function createMcp({ lattice, jev = null, mm = null, small = null, capacity = null, consolidateOpts = () => ({}), persist = null }) {
+export function createMcp({ lattice, jev = null, mm = null, small = null, predicates = null, capacity = null, consolidateOpts = () => ({}), persist = null }) {
   const tools = createToolRegistry(lattice);
-  const defs = toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small });
+  const defs = toolDefs({ hasJev: !!jev, hasMiniMax: !!mm, hasCapacity: !!capacity, hasSmall: !!small, hasPredicates: !!predicates });
   const names = new Set(defs.map(d => d.name));
 
   async function callTool(name, args = {}) {
@@ -154,6 +167,8 @@ export function createMcp({ lattice, jev = null, mm = null, small = null, capaci
       case "jev_minimax_proof": return orch.proveWithMiniMax(lattice, args.id, { mm, state: args.state });
       case "jev_decompose": return orch.decompose(lattice, args.id, { mm, maxSub: args.maxSub });
       case "jev_compile": return orch.compile(lattice, args.id, { jev, mm, state: args.state });
+      case "jev_predicate_register": return predicates.register(args);
+      case "jev_predicate_proof": return predicates.proof(lattice, args.id, { text: args.text, question: args.question, channel: args.channel });
       case "jev_edge_proof":
         return orch.proveWithLLM(lattice, args.id, { llm: small, state: args.state, source_type: "SMALL_MODEL", provider: small.provider, cost_weight: 0.15 });
     }

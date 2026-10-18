@@ -24,6 +24,13 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T18 | Drift invalidation by state hash + channel | `orchestrator.invalidateStale`, `jev_invalidate_stale` | proven (live, deployed) |
 | T19 | Latest reading per path (no cherry-picking) | `jev-core.js` `currentPaths` | proven (tests) |
 | T20 | OPEN on unchanged evidence needs a different verifier, not a re-ask | cache semantics | lesson |
+| T21 | Refute-only trust for compiled code | `compiled.mjs` `trust: "refute-only"`, `worker/predicates.mjs` | proven (live) |
+| T22 | Per-source thresholds instead of calibration maps | `question_spec.source_thresholds` | proven |
+| T23 | Decompose to count, not to conjoin | `experiments/decompose-vs-direct.mjs` | proven |
+| T24 | Ask the field, derive the propositions (Choice/Score → proof) | `choiceToProof`, `scoreToProof` | proven |
+| T25 | Sandboxed predicates in Dynamic Worker isolates | `worker/predicates.mjs` | deployed |
+| T26 | Watched state = drift detector | `PUT /api/:lattice/auto-verify` | deployed |
+| T27 | Cheap agent + lattice = honest gatekeeper | `experiments/minimax-agent.mjs` | proven (live) |
 
 ---
 
@@ -101,3 +108,24 @@ Proofs that share an independence key form one path, and the path's *current* re
 
 ### T20: OPEN on unchanged evidence needs a different verifier, not a re-ask
 With T16 plus T19, re-asking Jev about an OPEN gate on the same evidence returns the same answer, deliberately. To move the gate, change the evidence or add an *independent* path (MiniMax CoT, a compiled parser, a sensor). The cache turns "ask again" from a lottery into a no-op.
+
+### T21: Refute-only trust for compiled code
+Model-written predicates can say **no** on their own; a **yes** must be confirmed by Jev. Teacher validation on 20 configs still let through predicates that gave wrong GOs: 8 in distribution and up to 24 after a format shift. Refute-only kept wrong GOs at 0 and halved Jev cost. At the edge this is the 0.8 YES confidence.
+
+### T22: Per-source thresholds instead of calibration maps
+A source that emits a handful of discrete values (Workers AI llama: 0, 0.9, 0.95, 0.999, 1) is best handled by raising *its* bar, `source_thresholds: {SMALL_MODEL: 0.99}`. Isotonic calibration did exactly the same on held-out data, at the cost of opaque maps. Don't calibrate a source that is already calibrated: it made Jev worse.
+
+### T23: Decompose to count, not to conjoin
+Jev answers explicit ANDs of up to 6 conditions perfectly in one question. On "at least m of k" it abstains (50% decided for ≥4 of 6) without erring. Decomposing and counting deterministically decides 98–100%. Use the spec's own conditions for the split: a model's paraphrase can add constraints that were never there.
+
+### T24: Ask the field, derive the propositions
+One Choice ("which bind address?") or Score ("how much memory?") answers several yes/no gates by probability mass: P(prop) = Σ P(allowed options) or Σ P(levels ≥ L). Compared with one Noul per proposition this halved the questions, cut ECE from 0.033 to 0.0004, and raised recall at 0.9 from 0.97 to 1.00.
+
+### T25: Sandboxed predicates in Dynamic Worker isolates
+`env.LOADER.get(hash, …)` with `globalOutbound: null` and `limits.cpuMs`. Acceptance (labels) runs inside the same isolate the code will run in. Warm checks take under 1 ms.
+
+### T26: Watched state = drift detector
+PUT the current config to `/api/:lattice/auto-verify`. The Durable Object hashes it, retires proofs built on old content, and re-verifies the reopened gates through the cache, so a revert costs nothing. Use one channel per file to keep the blast radius small.
+
+### T27: Cheap agent + lattice = honest gatekeeper
+A MiniMax agent given the MCP tool definitions, told to verify through the lattice and report verbatim, got 16/16 deploy decisions right. Its 64/64 reported verdicts matched the lattice, including under explicit pressure to say GO. The deterministic gate is what makes the agent's report checkable.

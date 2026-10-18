@@ -150,4 +150,12 @@ for (const src of srcs.filter(x => x !== "jev")) {
   });
 }
 
+// --rows file: raw (source, cfg, question, p, truth) rows for fitting calibration maps
+const ROWS = opt("--rows", null);
+if (ROWS) {
+  const rows = [];
+  for (const [src, map] of Object.entries(results)) for (const [k, v] of map) rows.push({ source: src, case: k, q: Number(k.split(":q")[1]), ...v });
+  fs.writeFileSync(ROWS, JSON.stringify(rows));
+}
+
 if (OUT) fs.writeFileSync(OUT, JSON.stringify({ at: new Date().toISOString(), n: total, report }, null, 2));
