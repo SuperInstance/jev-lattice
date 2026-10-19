@@ -2,6 +2,12 @@
 
 All notable changes. Versions follow semver once v1.0 is reached; before that, minor versions may change APIs. The state schema stays importable forward.
 
+## 0.11.0
+### Added
+- `jev gate --compare-model <id>` / `compareModels()`: a model-upgrade rehearsal. Every gate is evaluated from scratch with the current and the candidate model on the same files, and the verdicts that would move are listed (nothing is saved; `--fail-on-change` exits 1 if any move). GitHub Action input `compare-model` adds the rehearsal to the job summary without affecting the gate.
+### Measured
+- Live rehearsal, 50 gates over generated redis/nginx/env/YAML files with 0.8+ evidence framing: jev-1.13.0 → jev-1.14.0 moved **0/50** verdicts (26 GO, 24 REFUTED, none fragile). R5-E's bare-state bench moved 4.7–6.2%.
+
 ## 0.10.0
 ### Security
 - `facts.mjs`: the flat `key` matcher took the *last* line with that key anywhere in a file. In YAML, an attacker-added nested key (`overrides: {server: {read_timeout: 500ms}}`) therefore became the "trusted" fact, and Jev followed it (4 of 20 wrong GOs). New: the `yaml` extractor and `path` for `size`/`duration` (a dotted path in a YAML block mapping). Fact specs that use `key` on a `.yml`/`.yaml` file are now **rejected** by `jev check-config`, `jev gate` and `jev_verify_files`.

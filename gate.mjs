@@ -151,6 +151,35 @@ export async function lintGates({ cfg, jev }) {
   return { ok: !findings.some(f => f.level === "error"), findings };
 }
 
+/**
+ * Model-upgrade rehearsal: evaluate every gate from scratch (no saved state) with the current
+ * verifier and with a candidate, on the same files, and report the verdicts that would move.
+ * Nothing is persisted. R5-E: 1.13.0 → 1.14.0 moved 4.7–6.2% of verdicts, so rehearse before
+ * changing a pin.
+ */
+export async function compareModels({ cfg, root = ".", jev, candidate }) {
+  const [a, b] = await Promise.all([runGate({ cfg, root, jev }), runGate({ cfg, root, jev: candidate })]);
+  const byId = new Map(b.results.map(r => [r.id, r]));
+  const rows = a.results.map(r => {
+    const c = byId.get(r.id);
+    return { id: r.id, current: r.verdict, candidate: c.verdict, moved: r.verdict !== c.verdict, margin: [r.margin, c.margin], fragile: [r.fragile, c.fragile] };
+  });
+  return {
+    current_model: jev.model, candidate_model: candidate.model,
+    moved: rows.filter(r => r.moved).length, total: rows.length,
+    pass: { current: a.pass, candidate: b.pass },
+    errors: [a.verifierError, b.verifierError].filter(Boolean),
+    rows
+  };
+}
+
+export function formatComparison(c, format = "text") {
+  if (format === "json") return JSON.stringify(c, null, 2);
+  const head = `Model rehearsal: ${c.current_model} → ${c.candidate_model}: ${c.moved}/${c.total} verdict(s) would move; run passes: ${c.pass.current} → ${c.pass.candidate}`;
+  const rows = c.rows.map(r => `${r.moved ? "MOVES " : "same  "} ${r.id.padEnd(24)} ${r.current.padEnd(8)} → ${r.candidate.padEnd(8)} margin ${r.margin[0] ?? "–"} → ${r.margin[1] ?? "–"}`);
+  return [head, ...rows, ...c.errors.map(e => `verifier error: ${e}`)].join("\n");
+}
+
 export function formatResult(run, format = "text") {
   if (format === "json") return JSON.stringify(run, null, 2);
   const icon = r => (r.go ? "✅" : r.verdict === "REFUTED" ? "❌" : "⏸️");

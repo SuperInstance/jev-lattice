@@ -19,4 +19,6 @@ export interface GateRun {
 export function loadConfig(file: string): { cfg: GateConfig; errors: string[] };
 export function runGate(o: { cfg: GateConfig; root?: string; statePath?: string | null; jev?: object | null }): Promise<GateRun>;
 export function lintGates(o: { cfg: GateConfig; jev?: object | null }): Promise<{ ok: boolean; findings: { gate: string; level: "error" | "warn" | "info"; issue: string; p?: number }[] }>;
+export function compareModels(o: { cfg: GateConfig; root?: string; jev: { model: string }; candidate: { model: string } }): Promise<{ current_model: string; candidate_model: string; moved: number; total: number; pass: { current: boolean; candidate: boolean }; errors: string[]; rows: { id: string; current: Verdict; candidate: Verdict; moved: boolean; margin: [number | null, number | null]; fragile: [boolean, boolean] }[] }>;
+export function formatComparison(c: Awaited<ReturnType<typeof compareModels>>, format?: "text" | "json"): string;
 export function formatResult(run: GateRun, format?: "text" | "json" | "markdown"): string;

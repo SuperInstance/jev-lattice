@@ -239,6 +239,11 @@ The guide distilled from this round: [guides/typesafe.md](guides/typesafe.md). W
 | `scripts/metrics-report.mjs` on live data | Production over 24 h: 467 requests, 0 5xx, p95 ≤ 560 ms; staging: 2299 requests, 0 5xx. The SLO check works against the Analytics Engine SQL API. |
 | Action status functions (`tests/helpers/gha-expr.mjs`) | Modelling GitHub's implicit `success()` showed that the fail step never ran after a failed gate step; `always()` added. |
 
+## 2026-10-19: round 8 (v0.11)
+| experiment | headline |
+|---|---|
+| Live upgrade rehearsal (`jev gate --compare-model`, 50 gates over 5 generated services: redis, nginx, env, YAML with facts) | jev-1.13.0 → jev-1.14.0: **0/50 verdicts moved** (26 GO, 24 REFUTED, 0 fragile on either side). R5-E's bare states moved 4.7–6.2%. The evidence framing added in 0.8–0.10 (descriptions, comment stripping, path-exact facts) makes verdicts robust to the model change, not only to attackers. |
+
 ## Backlog
 1. ~~Proof cache~~: done.
 2. ~~Compiled-first scheduler~~: done. Ship refute-only.
