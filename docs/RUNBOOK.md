@@ -20,6 +20,11 @@
 - **Metrics:** the Analytics Engine dataset `jev_lattice` gets one point per request. Blobs are route, lattice, tenant, status and tool; doubles are latency in ms and an is-5xx flag. Query it with the SQL API, for example p95 latency by route over the last hour.
 - **Per-lattice stats:** `GET /api/<name>/stats` (nodes, open gates, last idle cycle, cache hit rate). Audit trail: `GET /api/<name>/audit`.
 
+## Model upgrades
+1. `JEV_MODEL=<current> npx jev gate --compare-model <candidate>` on each gated repository (or set the Action's `compare-model` input for one CI run).
+2. Review every `MOVES` row. A move from or to OPEN is usually a fragile gate (see its margins); a GO ↔ REFUTED move needs a look at the evidence.
+3. Change the pin (the Action's `model` input, `JEV_MODEL` in `wrangler.jsonc`), deploy staging, smoke-test, then production. The proof cache keys on the model, so each gate is re-verified once.
+
 ## Incidents
 | Symptom | Likely cause | Action |
 |---|---|---|

@@ -22,6 +22,9 @@ inputs:
   model:
     description: Jev model to pin. Verdicts can change across model versions, so pin and upgrade deliberately.
     default: jev-1.13.0
+  compare-model:
+    description: "Optional: a candidate model (e.g. jev-1.14.0). Adds an informational rehearsal to the job summary listing the verdicts that would move; it never changes the gate result."
+    default: ""
   typesafe-token:
     description: TypeSafe API key (pass a secret). Not needed when offline is true.
     default: ""
@@ -62,6 +65,13 @@ runs:
         # so steps.gate.outcome is `success` even when a gate is REFUTED -- and an outcome-based
         # gate can then never fire.
         exit $code
+    - name: Rehearse a model upgrade (informational)
+      if: always() && inputs.compare-model != '' && inputs.offline != 'true'
+      shell: bash
+      env:
+        JEV_MODEL: ${{ inputs.model }}
+        TYPESAFE_AI_TOKEN: ${{ inputs.typesafe-token }}
+      run: node "${{ github.action_path }}/bin/jev.mjs" gate --config "${{ inputs.config }}" --root "${{ inputs.root }}" --compare-model "${{ inputs.compare-model }}" || echo "::warning::model rehearsal could not run"
     - name: Save lattice state
       if: always()
       uses: actions/cache/save@v4

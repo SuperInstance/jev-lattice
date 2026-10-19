@@ -146,3 +146,15 @@ test("lintGates: GO on empty files is an error, a lean is a warning, wide reads 
   assert.deepEqual(by("warn"), ["log", "tls"]);
   assert.deepEqual(by("info"), ["debug"]);
 });
+
+test("compareModels reports the verdicts a candidate model would move, without touching state", async () => {
+  const { compareModels, formatComparison } = await import("../gate.mjs");
+  const { dir, cfg, state } = workspace();
+  const mk = (model, pDebug) => ({ model, async nouls(st, items) { const o = { _model: model }; for (const it of items) o[it.key] = { p: /TLS/.test(JSON.stringify(it.instructions)) ? 0.98 : pDebug }; return o; } });
+  const c = await compareModels({ cfg, root: dir, jev: mk("old", 0.97), candidate: mk("new", 0.5) });
+  assert.equal(c.moved, 1);
+  assert.deepEqual(c.rows.find(r => r.id === "no-debug"), { ...c.rows.find(r => r.id === "no-debug"), current: "GO", candidate: "OPEN", moved: true });
+  assert.deepEqual(c.pass, { current: true, candidate: false });
+  assert.equal(fs.existsSync(state), false, "no state written");
+  assert.match(formatComparison(c), /old → new: 1\/2 verdict\(s\) would move/);
+});

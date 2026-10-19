@@ -111,7 +111,7 @@ Two lessons. First, quarantine's "only what the files effectively configure coun
 
 ## 5. Model versions
 - 1.13.0 → 1.14.0 moved 4.7–6.2% of verdicts, which is 2–2.5× the rate of simply re-asking, with no change in accuracy [R5-E]. On the R6 benches, 1.14.0 was equal or slightly better everywhere (redis 482–488 vs 471–478 of 500).
-- **Pin a version** (`JEV_MODEL`, the Action's `model` input). Upgrade deliberately: run your gates on both versions, review the verdicts that move, then change the pin. The proof cache keys on the model, so an upgrade re-verifies each gate exactly once.
+- **Pin a version** (`JEV_MODEL`, the Action's `model` input). Upgrade deliberately: `jev gate --compare-model jev-1.14.0` runs your gates on both versions and lists the verdicts that move; review them, then change the pin. With 0.8+ framing (descriptions, comment stripping, facts), a 50-gate rehearsal moved 0 of 50 verdicts, against 4.7–6.2% for bare states in R5-E. Better evidence framing makes upgrades quieter. The proof cache keys on the model, so an upgrade re-verifies each gate exactly once.
 
 ## 6. Cheap checks before you trust a gate
 - **`jev lint`** asks every gate about empty versions of its files, in one call per file set. A gate that says GO with no evidence is answering from priors ("absent = pass"); a gate that leans yes (p ≥ 0.6) gets a warning. It also flags wide `reads` and negated phrasing. Across our 19 bench questions, none passed on empty files, but "Is DEBUG disabled?" leaned to 0.61 [R6, `typesafe-probes.mjs`].

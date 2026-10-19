@@ -6,6 +6,9 @@
  *             [--format text|json|markdown] [--offline]
  *   jev check-config [--config jev.gates.json]
  *   jev lint  [--config jev.gates.json]     probe each gate with empty files (one Jev call per file set)
+ *   jev gate --compare-model jev-1.14.0     rehearse a model upgrade: which verdicts would move
+ *                                           (fresh evaluation with both models; nothing saved;
+ *                                           exit 1 with --fail-on-change if any verdict moves)
  *   jev mcp                      start the stdio MCP server
  *   jev version
  *
@@ -34,7 +37,7 @@ if (cmd === "version") {
 if (cmd === "mcp") {
   await import(path.join(here, "..", "mcp-server.mjs"));
 } else if (cmd === "gate" || cmd === "check-config" || cmd === "lint") {
-  const { loadConfig, runGate, formatResult, lintGates } = await import(path.join(here, "..", "gate.mjs"));
+  const { loadConfig, runGate, formatResult, lintGates, compareModels, formatComparison } = await import(path.join(here, "..", "gate.mjs"));
   const configPath = flag("config", "jev.gates.json");
   if (!fs.existsSync(configPath)) die(`config not found: ${configPath}`);
   let loaded;
@@ -48,6 +51,16 @@ if (cmd === "mcp") {
     const { createJev } = await import(path.join(here, "..", "providers", "jev.mjs"));
     const { cachedJev, createProofCache } = await import(path.join(here, "..", "proof-cache.mjs"));
     jev = cachedJev(createJev(), createProofCache({ ttlMs: Number(process.env.JEV_CACHE_TTL_MS) || 24 * 3600e3 }));
+  }
+  if (cmd === "gate" && flag("compare-model")) {
+    if (!jev) die("--compare-model needs a verifier (not --offline)");
+    const { createJev } = await import(path.join(here, "..", "providers", "jev.mjs"));
+    const { cachedJev, createProofCache } = await import(path.join(here, "..", "proof-cache.mjs"));
+    const candidate = cachedJev(createJev({ model: flag("compare-model") }), createProofCache({ ttlMs: 3600e3 }));
+    const c = await compareModels({ cfg: loaded.cfg, root: flag("root", "."), jev, candidate });
+    process.stdout.write(formatComparison(c, flag("format", "text")) + "\n");
+    if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, "```\n" + formatComparison(c) + "\n```\n");
+    process.exit(has("fail-on-change") && c.moved ? 1 : c.errors.length ? 1 : 0);
   }
   if (cmd === "lint") {
     const r = await lintGates({ cfg: loaded.cfg, jev: has("offline") ? null : jev });

@@ -78,6 +78,8 @@ jobs:
           typesafe-token: ${{ secrets.TYPESAFE_AI_TOKEN }}
           model: jev-1.13.0                        # the default; change it deliberately
 ```
+**Rehearse before changing the pin.** `jev gate --compare-model jev-1.14.0` evaluates every gate with both models on the same files and lists the verdicts that would move (nothing is saved). In the Action, set `compare-model: jev-1.14.0` to get the same table in the job summary. On a 50-gate rehearsal with the current evidence framing, 0 of 50 verdicts moved.
+
 **Pin the verifier model.** Moving from `jev-1.13.0` to `jev-1.14.0` changed 4.7–6.2% of verdicts on our bench, 2–2.5× the rate of simply re-asking (`experiments/model-upgrade.mjs`). Accuracy didn't change, but a verdict that moves without a code change is noise in a pipeline. The proof cache keys on the model, so after an upgrade every gate is re-verified once. Locally, set `JEV_MODEL`.
 
 The Action restores and saves the state through `actions/cache`, writes a Markdown table to the job summary, fails the job when any gate isn't GO, and exposes `outputs.pass`.
