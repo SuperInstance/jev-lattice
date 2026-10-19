@@ -199,6 +199,12 @@ else {
     const au = await (await fetch(`${base}/api/${lattice}/audit?limit=5`, { headers: H })).json();
     check(au.entries.some(e => e.tool === "restore"), "audit: restore recorded");
   }
+  const dh = await (await fetch(`${base}/admin/health`, { headers: H })).json();
+  check(dh.ok && dh.checks.d1.ok && dh.checks.durable_object.ok && dh.checks.typesafe.ok !== false, "admin: deep health (D1, R2, DO, TypeSafe)", Object.entries(dh.checks || {}).map(([k, v]) => `${k}:${v.ok}${v.ms !== undefined ? `/${v.ms}ms` : ""}`).join(" "));
+  const bf = await (await fetch(`${base}/admin/lattices`, { method: "POST", headers: H, body: JSON.stringify({ names: [`${lattice}-legacy`] }) })).json();
+  const reg2 = await (await fetch(`${base}/admin/lattices`, { headers: H })).json();
+  check(bf.ok && reg2.lattices.some(l => l.name === `${lattice}-legacy`), "admin: registry backfill for pre-0.9 lattices");
+  check((await fetch(`${base}/admin/lattices`, { method: "POST", headers: H, body: JSON.stringify({ names: ["bad name!"] }) })).status === 400, "admin: backfill rejects bad names");
   const ek = await (await fetch(`${base}/admin/keys`, { method: "POST", headers: H, body: JSON.stringify({ tenant: "smoke", scopes: ["read"], lattices: [lattice], expires_in_days: 0.00001 }) })).json();
   await new Promise(r => setTimeout(r, 1500));
   const exp = await fetch(`${base}/api/${lattice}/stats`, { headers: { authorization: `Bearer ${ek.key}` } });

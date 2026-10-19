@@ -23,6 +23,8 @@
  *   POST /admin/keys | GET /admin/keys | DELETE /admin/keys/:id              [root only]
  *   GET  /admin/events                key create / revoke history            [root only]
  *   GET  /admin/lattices              every lattice ever written             [root only]
+ *   POST /admin/lattices              {names:[…]} register pre-0.9 lattices for backup [root only]
+ *   GET  /admin/health                D1, R2, Durable Object, TypeSafe reachability    [root only]
  *   POST /admin/backup                back up every lattice to R2 now        [root only]
  *   GET  /admin/backups/:name         list a lattice's backups               [root only]
  *   POST /admin/restore/:name         {key} restore a backup into the lattice [root only]
@@ -441,11 +443,41 @@ export async function backupAll(env) {
   return out;
 }
 
+/** Each dependency checked with a cheap call; overall ok only if all configured ones are ok. */
+async function deepHealth(env) {
+  const check = async (name, configured, fn) => {
+    if (!configured) return [name, { ok: null, note: "not configured" }];
+    const t0 = Date.now();
+    try { const detail = await fn(); return [name, { ok: true, ms: Date.now() - t0, ...(detail || {}) }]; }
+    catch (e) { return [name, { ok: false, ms: Date.now() - t0, error: e.message }]; }
+  };
+  const results = Object.fromEntries(await Promise.all([
+    check("d1", !!env.CONTROL, async () => { await env.CONTROL.prepare("SELECT 1").first(); }),
+    check("r2", !!env.BACKUPS, async () => { const l = await env.BACKUPS.list({ limit: 1 }); return { objects_seen: l.objects.length }; }),
+    check("durable_object", !!env.LATTICE, async () => { const i = await env.LATTICE.get(env.LATTICE.idFromName("__health")).info(); return { nodes: i.stats.nodes }; }),
+    check("typesafe", !!env.TYPESAFE_AI_TOKEN, async () => {
+      const r = await fetch("https://api.typesafe.ai/v1/models", { headers: { Authorization: `Bearer ${env.TYPESAFE_AI_TOKEN}` } });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return { pinned: env.JEV_MODEL || null };
+    })
+  ]));
+  return { ok: Object.values(results).every(r => r.ok !== false), server: SERVER_INFO, checks: results };
+}
+
 async function handleAdmin(req, env, principal, parts) {
   if (!principal.root) return json({ ok: false, error: "forbidden: key management needs the root key" }, 403);
   if (!env.CONTROL) return json({ ok: false, error: "no CONTROL D1 binding configured" }, 501);
   const ip = req.headers.get("cf-connecting-ip");
   if (parts[1] === "lattices" && req.method === "GET") return json({ ok: true, lattices: await listLattices(env) });
+  if (parts[1] === "lattices" && req.method === "POST") {
+    const { names } = (await req.json().catch(() => ({}))) || {};
+    if (!Array.isArray(names) || !names.length || names.length > 1000 || !names.every(n => typeof n === "string" && NAME_RE.test(n))) {
+      return json({ ok: false, error: "names: 1–1000 lattice names" }, 400);
+    }
+    for (const n of names) await registerLattice(env, n);
+    return json({ ok: true, registered: names.length });
+  }
+  if (parts[1] === "health" && req.method === "GET") return json(await deepHealth(env));
   if (parts[1] === "backup" && req.method === "POST") return json(await backupAll(env));
   if (parts[1] === "backups" && parts[2] && req.method === "GET") {
     if (!env.BACKUPS) return json({ ok: false, error: "no BACKUPS R2 binding" }, 501);

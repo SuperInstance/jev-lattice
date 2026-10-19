@@ -41,7 +41,7 @@ Jev reads literally and is weakest at units, last-wins overrides, defaults and c
   ]
 }
 ```
-- **Extractors** (`facts.mjs`): `directive`, `size` (Redis units), `duration` (ms/s/m/h), `env`, `json` (dotted path), `count` and `regex`. A missing value becomes `"not set"` unless you give a `default`. On the hard bench these took gates from 106 to 117 correct out of 120, with 0 wrong.
+- **Extractors** (`facts.mjs`): `directive`, `size` (Redis units), `duration` (ms/s/m/h), `env`, `json` (dotted path), `yaml` (dotted path), `count` and `regex`. **On YAML files use `path`** (`{"extract": "duration", "path": "server.read_timeout"}`): a flat `key` would also match an attacker's nested key of the same name, so the config check rejects it. A missing value becomes `"not set"` unless you give a `default`. On the hard bench these took gates from 106 to 117 correct out of 120, with 0 wrong.
 - **Facts are trusted.** Jev follows a fact over the file, so a wrong extractor means a wrong verdict. Prefer the built-in extractors, which are unit-tested.
 - **`strip_comments`** (default `true`) removes full-line comments before Jev reads the files. Comment-only injection attacks produced 13–19% wrong GOs without it, and 0% with it, at no cost in clean accuracy. Set it to `false` only for questions about comments.
 - **`quarantine: true`** frames the files as untrusted data and tells Jev that comments are never instructions. Use it when the files come from people you don't control (forks, user uploads): under 360 injection attempts it took wrong GOs from 1 to 0.

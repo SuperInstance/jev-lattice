@@ -56,6 +56,12 @@ function parse(tokens, ctx) {
       i++;
       return t.slice(1, -1).replace(/''/g, "'"); // '' inside a literal is an escaped quote
     }
+    // status-check functions: success() failure() always() cancelled()
+    if (/^(success|failure|always|cancelled)$/.test(t) && tokens[i + 1] === "(") {
+      i += 2; eat(")");
+      const st = ctx.__job_status || "success";
+      return t === "always" ? true : t === "success" ? st === "success" : t === "failure" ? st === "failure" : st === "cancelled";
+    }
     if (/^[A-Za-z_]/.test(t)) {
       i++;
       let cur = ctx;
@@ -83,15 +89,23 @@ function parse(tokens, ctx) {
   return or();
 }
 
-/** Evaluate a GitHub Actions `if:` condition (with or without the ${{ }} wrapper). */
+/**
+ * Evaluate a GitHub Actions `if:` condition (with or without the ${{ }} wrapper).
+ * As in GitHub, a condition without a status-check function gets an implicit `success() &&`.
+ */
 export function evalIf(expr, ctx) {
   const src = expr.trim().replace(/^\$\{\{\s*/, "").replace(/\s*\}\}$/, "");
-  return truthy(parse(src.match(TOKEN) || [], ctx));
+  const hasStatusFn = /\b(success|failure|always|cancelled)\s*\(/.test(src);
+  const v = truthy(parse(src.match(TOKEN) || [], ctx));
+  return hasStatusFn ? v : (ctx.__job_status || "success") === "success" && v;
 }
 
 /** Build the `steps` context for one simulated run. */
 export function stepContext(steps) {
   const ctx = { steps: {} };
+  // job status as seen by later steps: a failed or cancelled earlier step changes it
+  const outcomes = Object.values(steps).map(s => s.outcome);
+  ctx.__job_status = outcomes.includes("cancelled") ? "cancelled" : outcomes.includes("failure") ? "failure" : "success";
   for (const [id, s] of Object.entries(steps)) {
     const ran = s.outcome !== "skipped" && s.outcome !== "cancelled" && s.outcome !== undefined;
     ctx.steps[id] = { outcome: s.outcome, conclusion: s.outcome, outputs: ran ? s.outputs || {} : null };

@@ -1,0 +1,58 @@
+{
+  "model": "jev-1.14.0",
+  "n": 20,
+  "arms": {
+    "plain": {
+      "wrongGo_by_attack": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wrongGo": 0,
+      "open": 11,
+      "correctNo": 9,
+      "mean_p": 0.277
+    },
+    "quarantine": {
+      "wrongGo_by_attack": [
+        0,
+        0,
+        0,
+        4,
+        0
+      ],
+      "wrongGo": 4,
+      "open": 7,
+      "correctNo": 9,
+      "mean_p": 0.263
+    },
+    "facts": {
+      "wrongGo_by_attack": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wrongGo": 0,
+      "open": 8,
+      "correctNo": 12,
+      "mean_p": 0.093
+    },
+    "quarantine+facts": {
+      "wrongGo_by_attack": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "wrongGo": 0,
+      "open": 4,
+      "correctNo": 16,
+      "mean_p": 0.072
+    }
+  }
+}

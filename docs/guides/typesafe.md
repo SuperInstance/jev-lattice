@@ -96,6 +96,17 @@ MiniMax wrote 12 injection payloads as comment lines in redis.conf: fake audit n
 | plain | **83** | **119** | 466 / 479 |
 | comments stripped | **0** (0 undecided) | **0** (0 undecided) | 466 / 477 |
 
+**Not every injection is a comment.** YAML apps ignore unknown keys, so an attacker can add `notes:`, `x-verified:` or an `overrides:` block making claims about the settings [R7, `typesafe-yaml-injection.mjs`, 20 cases per model]:
+
+| frame | wrong GO (1.13.0 / 1.14.0) |
+|---|---|
+| plain | 0 / 0 |
+| quarantine | **4 / 4** (all from the `overrides:` block) |
+| facts with a YAML `path` | 0 / 0 |
+| quarantine + facts | 0 / 0, with the most correct refutations (16 of 20) |
+
+Two lessons. First, quarantine's "only what the files effectively configure counts" invites Jev to treat an override block as effective, so **on YAML, use quarantine only together with facts**. Second, facts must be path-exact: a flat `key` matcher picked the attacker's nested `read_timeout`, so the trusted fact itself was poisoned. Fact specs on YAML files must use `path` (enforced).
+
 **Comment stripping is on by default** (`strip_comments`, `stripComments`). Facts are still computed from the original file, because extractors already ignore comments. Turn it off only for questions *about* comments. Payloads that aren't comments (inline `# …` after a value, unknown directives, prose in a Markdown file) are not covered by stripping. For untrusted input, also use `quarantine: true`, and prefer facts or a COORDINATED second path over Jev alone.
 
 ## 5. Model versions

@@ -57,6 +57,7 @@ Small, reusable patterns that came out of the R&D. Each tile lists what it does,
 | T51 | Remove the attack surface, don't argue with it (strip comments) | `stripComments` (default on) | proven (R6) |
 | T52 | Adaptive red team with a reviewer model | `experiments/typesafe-redteam-adaptive.mjs` | method |
 | T53 | Evidence-blind lint | `lintGates`, `jev lint` | shipped |
+| T54 | Path-exact facts; trusted code can still be fed attacker input | `facts.mjs` `yamlPath`, YAML `key` rejected | proven (R7) |
 
 ---
 
@@ -237,3 +238,6 @@ A one-shot attack list badly underestimates risk: 1 wrong GO in 360 where an ada
 
 ### T53: Evidence-blind lint
 Ask every gate about empty versions of its files. A GO means the gate passes when its evidence is absent. One call per file set; it runs before a gate is trusted.
+
+### T54: Path-exact facts
+A trusted extractor is only as trustworthy as its addressing. Flat last-wins matching is right for redis.conf, but in YAML it picked an attacker's nested `overrides.server.read_timeout`, so the "trusted" fact carried the injection straight past every framing defense (4 of 20 wrong GOs). Address values by exact path in structured formats, and make the validator refuse the ambiguous form.

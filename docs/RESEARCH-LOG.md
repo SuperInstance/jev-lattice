@@ -232,6 +232,13 @@ The guide distilled from this round: [guides/typesafe.md](guides/typesafe.md). W
 | `typesafe-product.mjs` (through `verifyFiles` + `facts.mjs`) | 106 → **117/120** correct on 1.13.0 and 109 → 116 on 1.14.0, 0 wrong. |
 | MiniMax-M3 review of `facts.mjs` (falsifiable format) | 4 runnable cases, **4/4 real**, all one root cause: nginx `;` terminators (`10k;` → null). Fixed, with a test. The first attempt failed when the reasoning used the whole 24k token budget; it succeeded at 60k. |
 
+## 2026-10-18: round 7 (v0.10)
+| experiment | headline |
+|---|---|
+| `typesafe-yaml-injection.mjs` (5 non-comment YAML payloads × 4 values, both models) | Plain 0 wrong GOs; **quarantine alone 4/4** (the `overrides:` block); facts with the flat `key` matcher **4** (the extractor read the attacker's nested key, so the trusted fact was poisoned); facts with a YAML `path` **0**; quarantine + facts **0**, with 16/20 correct refutations. Fixed in `facts.mjs` (the `yaml` extractor, `path`, and YAML `key` rejected). |
+| `scripts/metrics-report.mjs` on live data | Production over 24 h: 467 requests, 0 5xx, p95 ≤ 560 ms; staging: 2299 requests, 0 5xx. The SLO check works against the Analytics Engine SQL API. |
+| Action status functions (`tests/helpers/gha-expr.mjs`) | Modelling GitHub's implicit `success()` showed that the fail step never ran after a failed gate step; `always()` added. |
+
 ## Backlog
 1. ~~Proof cache~~: done.
 2. ~~Compiled-first scheduler~~: done. Ship refute-only.

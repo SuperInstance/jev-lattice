@@ -43,7 +43,7 @@ export function loadConfig(file) {
   }
   if (cfg.facts !== undefined) {
     if (typeof cfg.facts !== "object" || cfg.facts === null || Array.isArray(cfg.facts)) errors.push("facts: an object mapping file paths to fact specs");
-    else for (const [file, specs] of Object.entries(cfg.facts)) errors.push(...checkFactSpecs(specs, `facts["${file}"]`));
+    else for (const [file, specs] of Object.entries(cfg.facts)) errors.push(...checkFactSpecs(specs, `facts["${file}"]`, file));
   }
   if (cfg.quarantine !== undefined && typeof cfg.quarantine !== "boolean") errors.push("quarantine: must be true or false");
   if (cfg.strip_comments !== undefined && typeof cfg.strip_comments !== "boolean") errors.push("strip_comments: must be true or false");

@@ -71,8 +71,10 @@ runs:
     # Keyed on the step's OUTCOME, not on an output string. A step that was skipped or cancelled
     # publishes no outputs, so `steps.gate.outputs.code` is null -- and null coerces to 0, which
     # made `!= '0'` false and waved a gate that never ran through as a pass.
+    # always(): without a status function GitHub adds an implicit success(), which skips this step
+    # exactly when the gate step failed, so the error annotation below would never be written.
     - name: Fail when gates are not GO
-      if: steps.gate.outcome != 'success'
+      if: always() && steps.gate.outcome != 'success'
       shell: bash
       run: |
         echo "::error::JEV gates are not all GO (outcome=${{ steps.gate.outcome }}, exit=${{ steps.gate.outputs.code }}); see the job summary"

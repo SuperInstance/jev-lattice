@@ -8,9 +8,12 @@
  * never model-written — and they say "not set" rather than guess.
  *
  * A fact spec: { name, extract, ...args }. Extractors:
- *   directive  key            last uncommented `key value` line (case-insensitive key), e.g. redis.conf
- *   size       key            directive value → bytes (Redis units: 1k=1000, 1kb=1024, 1m, 1mb, 1g, 1gb)
- *   duration   key            `key: 30s` / `key 500ms` → milliseconds (ms, s, m, h)
+ *   directive  key            last uncommented `key value` line (case-insensitive key) in a FLAT file
+ *                             (redis.conf, nginx, ini). Not for YAML: a nested key of the same name
+ *                             would win (an attacker's `overrides: {server: {read_timeout: …}}` did).
+ *   yaml       path           value at a dotted path in a YAML block mapping (server.read_timeout)
+ *   size       key | path     directive / YAML value → bytes (Redis units: 1k=1000, 1kb=1024, 1m, 1mb, 1g, 1gb)
+ *   duration   key | path     `key 500ms` / YAML `read_timeout: 30s` → milliseconds (ms, s, m, h)
  *   env        key            KEY=value from an env file (last wins, quotes stripped)
  *   json       path           dotted path in a JSON file (a.b.0.c)
  *   count      pattern        number of lines matching a regex (flags: i)
@@ -33,6 +36,30 @@ function lastDirective(text, key) {
   return v;
 }
 
+/**
+ * Value at a dotted path in a YAML block mapping (indentation-based subset: nested maps of
+ * scalars; sequences, flow style and anchors are not followed). Duplicate keys: last wins.
+ */
+export function yamlPath(text, path) {
+  const want = String(path).split(".");
+  const stack = []; // [{indent, key}]
+  let found = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    if (!raw.trim() || raw.trim().startsWith("#") || raw.trim().startsWith("- ")) continue;
+    const m = raw.match(/^(\s*)([^\s:#][^:#]*?)\s*:(?:\s+(.*?))?\s*$/);
+    if (!m) continue;
+    const indent = m[1].replace(/\t/g, "  ").length;
+    while (stack.length && stack[stack.length - 1].indent >= indent) stack.pop();
+    const key = m[2].trim().replace(/^["']|["']$/g, "");
+    const full = [...stack.map(s => s.key), key];
+    let value = m[3] === undefined ? "" : m[3].replace(/\s+#.*$/, "").trim();
+    if (value === "") { stack.push({ indent, key }); continue; }
+    if (full.length === want.length && full.every((k, i) => k === want[i])) found = value.replace(/^["']|["']$/g, "");
+  }
+  return found;
+}
+const valueOf = (text, { key, path }) => (path !== undefined ? yamlPath(text, path) : lastDirective(text, key));
+
 export function parseSize(v) {
   const m = String(v).trim().toLowerCase().match(/^(\d+(?:\.\d+)?)\s*(k|kb|m|mb|g|gb)?$/);
   return m ? Math.round(Number(m[1]) * SIZE[m[2] || ""]) : null;
@@ -44,8 +71,9 @@ export function parseDuration(v) {
 
 export const EXTRACTORS = {
   directive: (text, { key }) => lastDirective(text, key),
-  size: (text, { key }) => { const v = lastDirective(text, key); return v === null ? null : parseSize(v); },
-  duration: (text, { key }) => { const v = lastDirective(text, key); return v === null ? null : parseDuration(v); },
+  yaml: (text, { path }) => yamlPath(text, path),
+  size: (text, spec) => { const v = valueOf(text, spec); return v === null ? null : parseSize(v); },
+  duration: (text, spec) => { const v = valueOf(text, spec); return v === null ? null : parseDuration(v); },
   env: (text, { key }) => {
     let v = null;
     for (const line of String(text).split(/\r?\n/)) {
@@ -68,15 +96,19 @@ export const EXTRACTORS = {
 };
 
 /** Validate fact specs; → list of errors (empty = ok). */
-export function checkFactSpecs(specs, where = "facts") {
+export function checkFactSpecs(specs, where = "facts", file = null) {
   const errors = [];
   if (!Array.isArray(specs)) return [`${where}: must be an array`];
   specs.forEach((f, i) => {
     const at = `${where}[${i}]`;
     if (!f || typeof f.name !== "string" || !/^[A-Za-z_][\w.-]*$/.test(f.name)) errors.push(`${at}.name: identifier required`);
     if (!EXTRACTORS[f?.extract]) errors.push(`${at}.extract: one of ${Object.keys(EXTRACTORS).join(", ")}`);
-    if (["directive", "size", "duration", "env"].includes(f?.extract) && typeof f.key !== "string") errors.push(`${at}.key: required for ${f.extract}`);
-    if (f?.extract === "json" && typeof f.path !== "string") errors.push(`${at}.path: required for json`);
+    if (["directive", "env"].includes(f?.extract) && typeof f.key !== "string") errors.push(`${at}.key: required for ${f.extract}`);
+    if (["size", "duration"].includes(f?.extract) && typeof f.key !== "string" && typeof f.path !== "string") errors.push(`${at}: ${f.extract} needs key (flat files) or path (YAML)`);
+    if (["json", "yaml"].includes(f?.extract) && typeof f.path !== "string") errors.push(`${at}.path: required for ${f.extract}`);
+    if (file && /\.ya?ml$/i.test(file) && ["directive", "size", "duration"].includes(f?.extract) && f.path === undefined) {
+      errors.push(`${at}: ${file} is YAML; use "path" (e.g. server.read_timeout) — a flat "key" matches nested keys of the same name`);
+    }
     if (["count", "regex"].includes(f?.extract)) {
       if (typeof f.pattern !== "string") errors.push(`${at}.pattern: required for ${f.extract}`);
       else try { new RegExp(f.pattern); } catch (e) { errors.push(`${at}.pattern: ${e.message}`); }

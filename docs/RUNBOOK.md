@@ -14,6 +14,8 @@
 
 ## Health and signals
 - `GET /health` returns `{ok, server: {version}}`. It needs no auth.
+- `GET /admin/health` (root) checks D1, R2, a Durable Object and TypeSafe, with latencies. Use it after deploys and during incidents.
+- **SLOs:** availability ≥ 99.9% (non-5xx) and p95 ≤ 1000 ms on `/api` and `/mcp`. Check with `node scripts/metrics-report.mjs [--hours 24] [--dataset jev_lattice_staging]`; the `slo` workflow runs it hourly and fails, which notifies you, on a breach.
 - Every API response carries `x-request-id`; unhandled errors are logged as JSON `{event: "unhandled", rid, path, error}`. Find them with `npx wrangler tail [--env staging] --format json` or in the Workers observability UI.
 - **Metrics:** the Analytics Engine dataset `jev_lattice` gets one point per request. Blobs are route, lattice, tenant, status and tool; doubles are latency in ms and an is-5xx flag. Query it with the SQL API, for example p95 latency by route over the last hour.
 - **Per-lattice stats:** `GET /api/<name>/stats` (nodes, open gates, last idle cycle, cache hit rate). Audit trail: `GET /api/<name>/audit`.
@@ -36,7 +38,7 @@
 - A 5000-question lattice (the default `max_nodes`): import 1.25 s for a 1.2 MB body; an audited write p50 233 ms; evaluating one gate about 40 ms.
 - The idle cycle at 5000 nodes went from **9.9 s to 2.2 s** in 0.9 (0.26 s locally). Nodes imported without coordinates had all collapsed onto one point.
 
-**Registry note:** the backup job backs up the lattices in the D1 registry. A lattice is registered on its first write after 0.9, so lattices that existed before 0.9 and are never written again are not backed up. Export those once with `GET /api/<name>/state`.
+**Registry note:** the backup job backs up the lattices in the D1 registry. A lattice is registered on its first write after 0.9, so lattices that existed before 0.9 and are never written again are not backed up. Register them with `POST /admin/lattices {"names": ["…"]}`.
 
 ## Restore drill (do this once per quarter)
 ```bash
